@@ -1,4 +1,4 @@
-# Source A — PostgreSQL AdventureWorks OLTP
+# Source A: PostgreSQL AdventureWorks OLTP
 
 This is the real, normalized OLTP source for the production-spine phase. It is
 independent of the small DuckDB fixture used by the existing fast test loop.

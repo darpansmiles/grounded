@@ -280,7 +280,7 @@ def _sqlite_source_path(pack: Pack) -> Path:
         raise ValueError(f"Pack {pack.name!r} does not provide a SQLite source.path")
     if not source_path.is_file():
         raise RuntimeError(
-            f"SQLite source is missing: place the SQLite at {source_path} — "
+            f"SQLite source is missing: place the SQLite at {source_path}. "
             "see source/README.md for the download URL"
         )
     return source_path

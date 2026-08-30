@@ -25,7 +25,7 @@ Each completed governed cell has a 0.0% hallucination rate. The ranges below are
 
 On the full TPC-H card, the governed rates are 0.0% for all nine models while the ungoverned arm ranges from 50.6% to 100.0% when the all-schema-break phi4 outcome is read separately. Exact McNemar tests have zero discordance in the governed-wrong direction for the completed paired cases; for example the TPC-H `qwen2.5:14b` comparison reports b=249, c=0, p=2.21086e-75.
 
-The raw cards are retained as local run artifacts; this page transcribes the public summary so it remains useful after a fresh clone.
+The committed Markdown cards in `evals/results/` are the citable public evidence for these results. New local result cards are ignored, so a fresh benchmark run does not clutter the published record.
 
 ## What the control arm actually broke
 

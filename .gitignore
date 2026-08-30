@@ -34,6 +34,7 @@ docs/ai-pm-roadmap-alignment.md
 
 # Raw benchmark payloads are local; keep the small Markdown result summaries tracked.
 evals/results/*.json
+evals/results/*.md
 evals/benchmark.json
 evals/model_card.json
 audit.log.jsonl

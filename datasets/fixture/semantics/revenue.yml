@@ -13,11 +13,11 @@ dimensions:
   - {name: order_month, source: orders.order_ts, granularity: month}
   - {name: country,     source: customers.country}
 lineage:
-  cube_member: Revenue.revenue        # placeholder until Cube exists; used by citation later
-  model: sqlmesh:mart_revenue         # placeholder; DuckDB view stands in this week
+  cube_member: Revenue.revenue        # synthetic fixture lineage for the deterministic walkthrough; not a Cube pack
+  model: sqlmesh:mart_revenue         # synthetic fixture lineage; the local DuckDB view provides execution
   tables: [gold.mart_revenue, silver.stg_order_items, raw.orders, raw.order_items]
   sources: [postgres.shop]
-policies:                             # declared now; ENFORCED in Slice 002, not here
+policies:                             # fixture declarations enforced by the governed service
   - id: pii-mask-email
     applies_to: customers.email
     rule: mask
@@ -27,6 +27,6 @@ policies:                             # declared now; ENFORCED in Slice 002, not
     rule: row_filter
     predicate: "country IN ('DE','FR','NL')"
     when_role: [eu_analyst]
-verification:                         # declared now; RUN in Slice 002, not here
+verification:                         # fixture declarations executed by the governed service
   - {type: non_negative, field: revenue}
   - {type: not_null, field: category}

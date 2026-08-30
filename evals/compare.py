@@ -339,7 +339,7 @@ def compact_comparison_card(
 def _markdown_cell(value: Any) -> str:
     """Render long raw SQL/errors safely inside a compact Markdown table."""
     if value is None:
-        return "—"
+        return "n/a"
     return f"<pre>{str(value).replace('|', '&#124;')}</pre>"
 
 
@@ -359,7 +359,7 @@ def write_failure_exemplars(
                 if exemplar["label"] in {"correct_answer", "correct_refusal"}:
                     continue
                 grouped.setdefault(exemplar["label"], []).append((model, arm, exemplar))
-    lines = [f"# Grounded benchmark failure exemplars — {dataset}", ""]
+    lines = [f"# Grounded benchmark failure exemplars: {dataset}", ""]
     if not grouped:
         lines.append("No non-success exemplars were retained for this run.")
     for label in sorted(grouped):

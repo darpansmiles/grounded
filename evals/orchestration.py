@@ -91,8 +91,8 @@ def _render_summary(summary: dict[str, Any]) -> str:
     for dataset, result in summary["datasets"].items():
         status = result["status"]
         if result.get("reason"):
-            status = f"{status} — {result['reason']}"
-        lines.append(f"| {dataset} | {status} | {', '.join(result.get('cards', [])) or '—'} |")
+            status = f"{status}: {result['reason']}"
+        lines.append(f"| {dataset} | {status} | {', '.join(result.get('cards', [])) or 'n/a'} |")
     return "\n".join(lines) + "\n"
 
 

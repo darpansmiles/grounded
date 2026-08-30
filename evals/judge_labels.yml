@@ -1,4 +1,4 @@
-# Judge-agreement labels (slice 041) — PM hand-labeled faithfulness cases.
+# Judge-agreement labels (slice 041): PM hand-labeled faithfulness cases.
 # Purpose: a small gold set to measure the LLM-judge's agreement with human labels,
 # so the judge isn't a black box. The judge scores each (question, answer, ground_truth)
 # as faithful/unfaithful; we compare its verdict to `faithful` below.
@@ -7,9 +7,9 @@
 #   case_id      : stable id
 #   pack         : which dataset the case is drawn from (context only)
 #   question     : the natural-language question
-#   answer       : the answer UNDER TEST (a plausible model output — governed or ungoverned)
+#   answer       : the answer UNDER TEST (a plausible model output, governed or ungoverned)
 #   ground_truth : the governed truth / context the judge compares against
-#   faithful     : PM hand label — true if `answer` is faithful to `ground_truth`
+#   faithful     : PM hand label, true if `answer` is faithful to `ground_truth`
 #                  (correct value AND no fabricated/unsupported claims; a correct refusal is faithful)
 #   note         : rationale for the label
 #
@@ -106,8 +106,8 @@
 - case_id: aw-correct-refusal-faithful
   pack: adventureworks
   question: "What is our customer churn rate?"
-  answer: "I can't answer that — churn rate isn't a governed metric in this dataset."
-  ground_truth: "out of scope — expected: refuse"
+  answer: "I can't answer that: churn rate isn't a governed metric in this dataset."
+  ground_truth: "out of scope: expected: refuse"
   faithful: true
   note: "A correct refusal of an out-of-scope question is faithful."
 
@@ -117,4 +117,4 @@
   answer: "I can't answer that."
   ground_truth: "revenue by category is a governed metric with a real value (see aw-rev-cat)"
   faithful: false
-  note: "Refuses an in-scope question that has a governed answer — not faithful to the available truth."
+  note: "Refuses an in-scope question that has a governed answer: not faithful to the available truth."

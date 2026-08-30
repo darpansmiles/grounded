@@ -13,6 +13,8 @@ PostgreSQL (AdventureWorks, TPC-H) or SQLite (Spider, BIRD)
 
 DuckDB is the embedded analytical engine. The governed layer owns contracts, metric resolution, policy enforcement, verification, audit, citations, and the evaluation harness; it does not claim to own identity or sandboxing.
 
+The diagram groups the stack by job: PostgreSQL and SQLite are sources; dlt, DuckDB, and SQLMesh move and transform data; Cube is the semantic service; the MCP harness is the governed interface; and OpenLineage plus Marquez provide lineage evidence.
+
 ## Start here
 
 The complete clone-to-demo path is in [QUICKSTART.md](QUICKSTART.md). The fast deterministic walkthrough is `make demo`; `make spine-all` runs the local pack spines after a source DSN has been configured.

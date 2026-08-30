@@ -128,7 +128,7 @@ def system_prompt() -> str:
     )
 
 
-# Compatibility for callers that inspect the default AdventureWorks prompt at import time.
+# Compatibility for callers that inspect the default prompt at import time.
 SYSTEM_PROMPT = system_prompt()
 
 
