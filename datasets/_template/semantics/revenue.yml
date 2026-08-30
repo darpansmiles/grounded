@@ -1,0 +1,13 @@
+metric: revenue
+label: Revenue
+description: Starter revenue metric over completed order items.
+definition:
+  measure: sum(order_items.quantity * order_items.unit_price)
+  grain: order_item
+  filter: orders.status = 'completed'
+dimensions:
+  - {name: category, source: products.category}
+  - {name: order_month, source: orders.order_ts, granularity: month}
+  - {name: country, source: customers.country}
+lineage:
+  tables: [gold.mart_revenue, silver.stg_order_items, raw.orders, raw.order_items]

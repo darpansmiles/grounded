@@ -1,0 +1,36 @@
+cubes:
+  - name: Schools
+    sql_table: bronze.schools
+    measures:
+      - name: school_count
+        sql: CDSCode
+        type: count
+    dimensions:
+      - name: cds_code
+        sql: CDSCode
+        type: string
+        primary_key: true
+        public: false
+      - name: county
+        sql: County
+        type: string
+  - name: FRPM
+    sql_table: bronze.frpm
+    measures:
+      - name: total_enrollment
+        sql: '"Enrollment (K-12)"'
+        type: sum
+    dimensions:
+      - name: county
+        sql: '"County Name"'
+        type: string
+  - name: SATScores
+    sql_table: bronze.satscores
+    measures:
+      - name: avg_sat_math
+        sql: AvgScrMath
+        type: avg
+    dimensions:
+      - name: county
+        sql: cname
+        type: string

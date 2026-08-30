@@ -1,0 +1,21 @@
+metric: school_count
+label: School Count
+description: Count of California school records.
+owner: darpan
+definition:
+  measure: count(schools.CDSCode)
+  grain: school
+dimensions:
+  - {name: county, source: schools.County}
+lineage:
+  cube_member: Schools.school_count
+  model: none
+  tables: [bronze.schools]
+  sources: [bird_ca_schools.sqlite]
+policies:
+  - id: pii_mask_school_phone
+    applies_to: schools.Phone
+    rule: mask
+    unless_role: [analyst_pii, admin]
+verification:
+  - {type: non_negative, field: school_count}

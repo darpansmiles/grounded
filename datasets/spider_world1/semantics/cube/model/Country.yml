@@ -1,0 +1,25 @@
+cubes:
+  - name: Country
+    sql_table: bronze.country
+    measures:
+      - name: total_population
+        sql: Population
+        type: sum
+      - name: country_count
+        sql: Code
+        type: count
+      - name: total_gnp
+        sql: GNP
+        type: sum
+    dimensions:
+      - name: code
+        sql: Code
+        type: string
+        primary_key: true
+        public: false
+      - name: continent
+        sql: Continent
+        type: string
+      - name: region
+        sql: Region
+        type: string

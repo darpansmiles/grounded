@@ -1,0 +1,12 @@
+metric: aov
+label: Average Order Value
+description: Revenue per completed order (Revenue / Orders).
+owner: darpan
+definition:
+  derived: ratio
+  numerator: revenue
+  denominator: orders
+# dimensions, lineage, policies, verification are INHERITED from the parents at resolve time
+inherits: [revenue, orders]
+verification:
+  - {type: non_negative, field: aov}

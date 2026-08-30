@@ -1,0 +1,11 @@
+# Local Ollama roster for the full benchmark sweep. Hosted providers are unsupported.
+models:
+  - llama3.2:3b
+  - qwen2.5:3b
+  - qwen2.5:7b
+  - qwen2.5:14b
+  - llama3.1:8b
+  - gemma2:9b
+  - mistral:7b
+  - phi3.5:latest
+  - phi4:latest

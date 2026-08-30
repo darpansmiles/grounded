@@ -1,0 +1,4 @@
+id: pii-mask-customer-phone
+applies_to: dim_customer.phone
+rule: mask
+unless_role: [analyst_pii, admin]

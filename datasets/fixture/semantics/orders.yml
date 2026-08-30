@@ -1,0 +1,20 @@
+metric: orders
+label: Orders
+description: Count of distinct completed orders.
+owner: darpan
+definition:
+  measure: count_distinct(orders.order_id)
+  grain: order
+  filter: orders.status = 'completed'
+dimensions:
+  - {name: category,    source: products.category}
+  - {name: order_month, source: orders.order_ts, granularity: month}
+  - {name: country,     source: customers.country}
+lineage:
+  cube_member: Orders.count
+  model: sqlmesh:mart_revenue
+  tables: [gold.mart_revenue, silver.stg_order_items, raw.orders, raw.order_items]
+  sources: [postgres.shop]
+policies: []
+verification:
+  - {type: non_negative, field: orders}

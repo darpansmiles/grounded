@@ -1,0 +1,59 @@
+cubes:
+  - name: LineItems
+    sql_table: gold.fct_lineitem
+    joins:
+      - {name: Parts, relationship: many_to_one, sql: "{CUBE}.part_key = {Parts.part_key}"}
+      - {name: Suppliers, relationship: many_to_one, sql: "{CUBE}.supplier_key = {Suppliers.supplier_key}"}
+      - {name: Customers, relationship: many_to_one, sql: "{CUBE}.customer_key = {Customers.customer_key}"}
+      - {name: Nations, relationship: many_to_one, sql: "{CUBE}.nation_key = {Nations.nation_key}"}
+      - {name: Regions, relationship: many_to_one, sql: "{CUBE}.region_key = {Regions.region_key}"}
+      - {name: OrderDates, relationship: many_to_one, sql: "{CUBE}.order_date_key = {OrderDates.order_date_key}"}
+    measures:
+      - {name: revenue, sql: "extended_price * (1 - discount)", type: sum, filters: [{sql: "{CUBE}.is_completed = TRUE"}]}
+      - {name: orders, sql: order_key, type: count_distinct, filters: [{sql: "{CUBE}.is_completed = TRUE"}]}
+      - {name: aov, sql: "{revenue} / NULLIF({orders}, 0)", type: number}
+      - {name: margin, sql: "extended_price * (1 - discount) - supply_cost * quantity", type: sum, filters: [{sql: "{CUBE}.is_completed = TRUE"}]}
+    dimensions:
+      - {name: lineitem_key, sql: "CAST(order_key AS VARCHAR) || '-' || CAST(line_number AS VARCHAR)", type: string, primary_key: true, public: false}
+      - {name: nation, sql: "{Nations.nation}", type: string}
+      - {name: region, sql: "{Regions.region}", type: string}
+      - {name: market_segment, sql: "{Customers.market_segment}", type: string}
+      - {name: part_brand, sql: "{Parts.part_brand}", type: string}
+      - {name: part_type, sql: "{Parts.part_type}", type: string}
+      - {name: order_month, sql: "{OrderDates.order_date}", type: time}
+
+  - name: Parts
+    sql_table: gold.dim_part
+    dimensions:
+      - {name: part_key, sql: part_key, type: number, primary_key: true}
+      - {name: part_brand, sql: part_brand, type: string}
+      - {name: part_type, sql: part_type, type: string}
+
+  - name: Suppliers
+    sql_table: gold.dim_supplier
+    dimensions:
+      - {name: supplier_key, sql: supplier_key, type: number, primary_key: true}
+
+  - name: Customers
+    sql_table: gold.dim_customer
+    dimensions:
+      - {name: customer_key, sql: customer_key, type: number, primary_key: true}
+      - {name: market_segment, sql: market_segment, type: string}
+
+  - name: Nations
+    sql_table: gold.dim_nation
+    dimensions:
+      - {name: nation_key, sql: nation_key, type: number, primary_key: true}
+      - {name: nation, sql: nation, type: string}
+
+  - name: Regions
+    sql_table: gold.dim_region
+    dimensions:
+      - {name: region_key, sql: region_key, type: number, primary_key: true}
+      - {name: region, sql: region, type: string}
+
+  - name: OrderDates
+    sql_table: gold.dim_orderdate
+    dimensions:
+      - {name: order_date_key, sql: order_date_key, type: number, primary_key: true}
+      - {name: order_date, sql: order_date, type: time}

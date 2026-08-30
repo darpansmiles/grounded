@@ -1,0 +1,21 @@
+metric: avg_sat_math
+label: Average SAT Math Score
+description: Average SAT math score across California SAT score records.
+owner: darpan
+definition:
+  measure: avg(satscores.AvgScrMath)
+  grain: school
+dimensions:
+  - {name: county, source: satscores.cname}
+lineage:
+  cube_member: SATScores.avg_sat_math
+  model: none
+  tables: [bronze.satscores]
+  sources: [bird_ca_schools.sqlite]
+policies:
+  - id: pii_mask_school_phone
+    applies_to: schools.Phone
+    rule: mask
+    unless_role: [analyst_pii, admin]
+verification:
+  - {type: non_negative, field: avg_sat_math}

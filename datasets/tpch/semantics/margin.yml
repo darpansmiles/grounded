@@ -1,0 +1,31 @@
+metric: margin
+label: Margin
+description: Completed-order revenue less supplier cost times quantity.
+owner: darpan
+definition:
+  measure: sum(fct_lineitem.extended_price * (1 - fct_lineitem.discount) - fct_lineitem.supply_cost * fct_lineitem.quantity)
+  grain: order_line
+  filter: fct_lineitem.is_completed = true
+dimensions:
+  - {name: nation, source: dim_nation.nation}
+  - {name: region, source: dim_region.region}
+  - {name: market_segment, source: dim_customer.market_segment}
+  - {name: part_brand, source: dim_part.part_brand}
+  - {name: part_type, source: dim_part.part_type}
+  - {name: order_month, source: dim_orderdate.order_date, granularity: month}
+lineage:
+  cube_member: LineItems.margin
+  model: sqlmesh:gold.fct_lineitem
+  tables: [gold.fct_lineitem, gold.dim_part, gold.dim_supplier, gold.dim_customer, gold.dim_nation, gold.dim_region, gold.dim_orderdate, silver.stg_lineitem, silver.stg_orders, silver.stg_partsupp, silver.stg_part, silver.stg_supplier, silver.stg_customer, silver.stg_nation, silver.stg_region, bronze.region, bronze.nation, bronze.supplier, bronze.customer, bronze.part, bronze.partsupp, bronze.orders, bronze.lineitem]
+  sources: [postgres.tpch]
+policies:
+  - id: row-europe-only
+    applies_to: dim_region.region
+    cube_member: LineItems.region
+    operator: equals
+    values: [EUROPE]
+    rule: row_filter
+    predicate: "region = 'EUROPE'"
+    when_role: [eu_analyst]
+verification:
+  - {type: non_negative, field: margin}

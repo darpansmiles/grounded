@@ -1,0 +1,53 @@
+{
+  "graph": [
+    {
+      "id": "dataset:adventureworks.postgres:adventureworks.sales.salesorderdetail",
+      "type": "DATASET",
+      "data": {"id": {"namespace": "adventureworks.postgres", "name": "adventureworks.sales.salesorderdetail"}},
+      "inEdges": [],
+      "outEdges": [{"origin": "dataset:adventureworks.postgres:adventureworks.sales.salesorderdetail", "destination": "job:adventureworks.dlt:adventureworks_to_bronze"}]
+    },
+    {
+      "id": "job:adventureworks.dlt:adventureworks_to_bronze",
+      "type": "JOB",
+      "data": {"id": {"namespace": "adventureworks.dlt", "name": "adventureworks_to_bronze"}},
+      "inEdges": [{"origin": "dataset:adventureworks.postgres:adventureworks.sales.salesorderdetail", "destination": "job:adventureworks.dlt:adventureworks_to_bronze"}],
+      "outEdges": [{"origin": "job:adventureworks.dlt:adventureworks_to_bronze", "destination": "dataset:adventureworks.bronze:salesorderdetail"}]
+    },
+    {
+      "id": "dataset:adventureworks.bronze:salesorderdetail",
+      "type": "DATASET",
+      "data": {"id": {"namespace": "adventureworks.bronze", "name": "salesorderdetail"}},
+      "inEdges": [{"origin": "job:adventureworks.dlt:adventureworks_to_bronze", "destination": "dataset:adventureworks.bronze:salesorderdetail"}],
+      "outEdges": [{"origin": "dataset:adventureworks.bronze:salesorderdetail", "destination": "job:adventureworks.sqlmesh:silver.stg_sales_order_line"}]
+    },
+    {
+      "id": "job:adventureworks.sqlmesh:silver.stg_sales_order_line",
+      "type": "JOB",
+      "data": {"id": {"namespace": "adventureworks.sqlmesh", "name": "silver.stg_sales_order_line"}},
+      "inEdges": [{"origin": "dataset:adventureworks.bronze:salesorderdetail", "destination": "job:adventureworks.sqlmesh:silver.stg_sales_order_line"}],
+      "outEdges": [{"origin": "job:adventureworks.sqlmesh:silver.stg_sales_order_line", "destination": "dataset:adventureworks.silver:stg_sales_order_line"}]
+    },
+    {
+      "id": "dataset:adventureworks.silver:stg_sales_order_line",
+      "type": "DATASET",
+      "data": {"id": {"namespace": "adventureworks.silver", "name": "stg_sales_order_line"}},
+      "inEdges": [{"origin": "job:adventureworks.sqlmesh:silver.stg_sales_order_line", "destination": "dataset:adventureworks.silver:stg_sales_order_line"}],
+      "outEdges": [{"origin": "dataset:adventureworks.silver:stg_sales_order_line", "destination": "job:adventureworks.sqlmesh:gold.fct_sales"}]
+    },
+    {
+      "id": "job:adventureworks.sqlmesh:gold.fct_sales",
+      "type": "JOB",
+      "data": {"id": {"namespace": "adventureworks.sqlmesh", "name": "gold.fct_sales"}},
+      "inEdges": [{"origin": "dataset:adventureworks.silver:stg_sales_order_line", "destination": "job:adventureworks.sqlmesh:gold.fct_sales"}],
+      "outEdges": [{"origin": "job:adventureworks.sqlmesh:gold.fct_sales", "destination": "dataset:adventureworks.gold:fct_sales"}]
+    },
+    {
+      "id": "dataset:adventureworks.gold:fct_sales",
+      "type": "DATASET",
+      "data": {"id": {"namespace": "adventureworks.gold", "name": "fct_sales"}},
+      "inEdges": [{"origin": "job:adventureworks.sqlmesh:gold.fct_sales", "destination": "dataset:adventureworks.gold:fct_sales"}],
+      "outEdges": []
+    }
+  ]
+}

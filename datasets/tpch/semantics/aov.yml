@@ -1,0 +1,11 @@
+metric: aov
+label: Average Order Value
+description: Completed-order revenue divided by distinct completed orders.
+owner: darpan
+definition:
+  derived: ratio
+  numerator: revenue
+  denominator: orders
+inherits: [revenue, orders]
+verification:
+  - {type: non_negative, field: aov}

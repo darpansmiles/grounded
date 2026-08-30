@@ -1,0 +1,12 @@
+- case_id: revenue-by-category
+  question: What is revenue by category?
+  role: viewer
+  expected_plan:
+    tool: query_metric
+    args: {metric: revenue, dimensions: [category], filters: {}}
+  expect: {type: metric}
+- case_id: out-of-scope
+  question: Forecast next year's demand.
+  role: viewer
+  expected_plan: {tool: refuse, args: {}}
+  expect: {type: refuse}

@@ -1,0 +1,1 @@
+"""Contract-B result verification."""

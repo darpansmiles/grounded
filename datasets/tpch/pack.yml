@@ -1,0 +1,31 @@
+name: tpch
+lineage_namespace: tpch
+scale_factor: 0.5
+source:
+  type: postgres
+  load: source/generate_and_load.sh
+  tables:
+    - tpch.region
+    - tpch.nation
+    - tpch.supplier
+    - tpch.customer
+    - tpch.part
+    - tpch.partsupp
+    - tpch.orders
+    - tpch.lineitem
+  connection:
+    dsn_env: GROUNDED_TPCH_SOURCE_DSN
+destination:
+  type: duckdb
+  path: data/tpch.duckdb
+  dataset: bronze
+transform: transform/
+semantics:
+  backend: cube
+  cube: semantics/cube/
+  metrics:
+    - semantics/revenue.yml
+    - semantics/orders.yml
+    - semantics/aov.yml
+    - semantics/margin.yml
+golden: golden.yml

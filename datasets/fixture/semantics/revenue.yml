@@ -1,0 +1,32 @@
+# contract-b: governed metric definition
+metric: revenue
+label: Revenue
+description: Gross merchandise revenue from completed order items.
+owner: darpan
+definition:
+  measure: sum(order_items.quantity * order_items.unit_price)
+  grain: order_item
+  # only orders with this status count toward revenue
+  filter: orders.status = 'completed'
+dimensions:
+  - {name: category,    source: products.category}
+  - {name: order_month, source: orders.order_ts, granularity: month}
+  - {name: country,     source: customers.country}
+lineage:
+  cube_member: Revenue.revenue        # placeholder until Cube exists; used by citation later
+  model: sqlmesh:mart_revenue         # placeholder; DuckDB view stands in this week
+  tables: [gold.mart_revenue, silver.stg_order_items, raw.orders, raw.order_items]
+  sources: [postgres.shop]
+policies:                             # declared now; ENFORCED in Slice 002, not here
+  - id: pii-mask-email
+    applies_to: customers.email
+    rule: mask
+    unless_role: [analyst_pii, admin]
+  - id: row-eu-only
+    applies_to: customers.country
+    rule: row_filter
+    predicate: "country IN ('DE','FR','NL')"
+    when_role: [eu_analyst]
+verification:                         # declared now; RUN in Slice 002, not here
+  - {type: non_negative, field: revenue}
+  - {type: not_null, field: category}

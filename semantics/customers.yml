@@ -1,0 +1,16 @@
+# contract-b: governed entity read (not a metric; a governed columnar read)
+read: customer_directory
+label: Customer Directory
+description: Governed read of customers with PII-masked email.
+owner: darpan
+columns:
+  - {name: name,    source: customers.name}
+  - {name: country, source: customers.country}
+  - {name: email,   source: customers.email, pii: true}
+policies:
+  - id: pii-mask-email
+    applies_to: customers.email
+    rule: mask
+    unless_role: [analyst_pii, admin]
+verification:
+  - {type: not_null, field: name}

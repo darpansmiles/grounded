@@ -1,0 +1,21 @@
+name: fixture
+lineage_namespace: fixture
+source:
+  type: duckdb_seed
+  load: source/seed.py
+  tables:
+    - customers
+    - products
+    - orders
+    - order_items
+destination:
+  type: duckdb
+  path: data/fixture.duckdb
+  dataset: fixture
+semantics:
+  backend: fixture
+  metrics:
+    - semantics/revenue.yml
+    - semantics/orders.yml
+    - semantics/aov.yml
+golden: golden.yml

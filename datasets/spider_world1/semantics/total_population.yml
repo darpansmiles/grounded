@@ -1,0 +1,26 @@
+metric: total_population
+label: Total Population
+description: Total population across the declared Spider world countries.
+owner: darpan
+definition:
+  measure: sum(country.Population)
+  grain: country
+dimensions:
+  - {name: continent, source: country.Continent}
+  - {name: region, source: country.Region}
+lineage:
+  cube_member: Country.total_population
+  model: none
+  tables: [bronze.country]
+  sources: [spider_world1.sqlite]
+policies:
+  - id: row_europe_only
+    applies_to: country.Continent
+    cube_member: Country.continent
+    operator: equals
+    values: [Europe]
+    rule: row_filter
+    predicate: "continent = 'Europe'"
+    when_role: [eu_analyst]
+verification:
+  - {type: non_negative, field: total_population}

@@ -1,0 +1,8 @@
+id: row-europe-only
+applies_to: dim_region.region
+cube_member: LineItems.region
+operator: equals
+values: [EUROPE]
+rule: row_filter
+predicate: "region = 'EUROPE'"
+when_role: [eu_analyst]

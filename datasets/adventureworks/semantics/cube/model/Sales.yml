@@ -1,0 +1,80 @@
+cubes:
+  - name: Sales
+    sql_table: gold.fct_sales
+    joins:
+      - name: Products
+        relationship: many_to_one
+        sql: "{CUBE}.product_key = {Products.product_key}"
+      - name: Territories
+        relationship: many_to_one
+        sql: "{CUBE}.territory_key = {Territories.territory_key}"
+      - name: Dates
+        relationship: many_to_one
+        sql: "{CUBE}.date_key = {Dates.date_key}"
+    measures:
+      - name: revenue
+        sql: line_total
+        type: sum
+        filters:
+          - sql: "{CUBE}.is_completed = TRUE"
+      - name: orders
+        sql: order_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.is_completed = TRUE"
+      - name: aov
+        sql: "{revenue} / NULLIF({orders}, 0)"
+        type: number
+      - name: margin
+        sql: "line_total - standard_cost * quantity"
+        type: sum
+        filters:
+          - sql: "{CUBE}.is_completed = TRUE"
+    dimensions:
+      - name: sales_key
+        sql: "CAST(order_id AS VARCHAR) || '-' || CAST(line_number AS VARCHAR)"
+        type: string
+        primary_key: true
+        public: false
+      - name: category
+        sql: "{Products.category}"
+        type: string
+      - name: country
+        sql: "{Territories.country_region}"
+        type: string
+      - name: order_month
+        sql: "{Dates.full_date}"
+        type: time
+
+  - name: Products
+    sql_table: gold.dim_product
+    dimensions:
+      - name: product_key
+        sql: product_key
+        type: number
+        primary_key: true
+      - name: category
+        sql: category
+        type: string
+
+  - name: Territories
+    sql_table: gold.dim_territory
+    dimensions:
+      - name: territory_key
+        sql: territory_key
+        type: number
+        primary_key: true
+      - name: country_region
+        sql: country_region
+        type: string
+
+  - name: Dates
+    sql_table: gold.dim_date
+    dimensions:
+      - name: date_key
+        sql: date_key
+        type: number
+        primary_key: true
+      - name: full_date
+        sql: full_date
+        type: time

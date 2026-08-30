@@ -1,0 +1,21 @@
+metric: total_enrollment
+label: Total K-12 Enrollment
+description: Total K-12 enrollment reported in California FRPM records.
+owner: darpan
+definition:
+  measure: sum(frpm."Enrollment (K-12)")
+  grain: school_year
+dimensions:
+  - {name: county, source: frpm."County Name"}
+lineage:
+  cube_member: FRPM.total_enrollment
+  model: none
+  tables: [bronze.frpm]
+  sources: [bird_ca_schools.sqlite]
+policies:
+  - id: pii_mask_school_phone
+    applies_to: schools.Phone
+    rule: mask
+    unless_role: [analyst_pii, admin]
+verification:
+  - {type: non_negative, field: total_enrollment}

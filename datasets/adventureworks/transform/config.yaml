@@ -1,0 +1,13 @@
+gateways:
+  lakehouse:
+    connection:
+      type: duckdb
+      database: ../../../data/adventureworks.duckdb
+
+default_gateway: lakehouse
+disable_anonymized_analytics: true
+
+model_defaults:
+  dialect: duckdb
+  start: 2011-05-31
+  cron: '@daily'

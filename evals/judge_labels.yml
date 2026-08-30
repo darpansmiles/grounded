@@ -1,0 +1,120 @@
+# Judge-agreement labels (slice 041) — PM hand-labeled faithfulness cases.
+# Purpose: a small gold set to measure the LLM-judge's agreement with human labels,
+# so the judge isn't a black box. The judge scores each (question, answer, ground_truth)
+# as faithful/unfaithful; we compare its verdict to `faithful` below.
+#
+# Schema per case:
+#   case_id      : stable id
+#   pack         : which dataset the case is drawn from (context only)
+#   question     : the natural-language question
+#   answer       : the answer UNDER TEST (a plausible model output — governed or ungoverned)
+#   ground_truth : the governed truth / context the judge compares against
+#   faithful     : PM hand label — true if `answer` is faithful to `ground_truth`
+#                  (correct value AND no fabricated/unsupported claims; a correct refusal is faithful)
+#   note         : rationale for the label
+#
+# Ground-truth numbers are the real recorded governed results (AW/TPC-H/Spider/BIRD runs).
+
+- case_id: aw-rev-total-faithful
+  pack: adventureworks
+  question: "What is our total revenue?"
+  answer: "Total revenue is $109,846,381.43."
+  ground_truth: "revenue (total) = 109846381.43"
+  faithful: true
+  note: "Exact match to the governed total."
+
+- case_id: aw-rev-cat-faithful
+  pack: adventureworks
+  question: "What is revenue by product category?"
+  answer: "Bikes $94,651,172.72; Components $11,802,593.29; Clothing $2,120,542.53; Accessories $1,272,072.89."
+  ground_truth: "revenue by category = {Bikes: 94651172.72, Components: 11802593.29, Clothing: 2120542.53, Accessories: 1272072.89}"
+  faithful: true
+  note: "All four category values correct."
+
+- case_id: aw-rev-total-wrong-number
+  pack: adventureworks
+  question: "What is our total revenue?"
+  answer: "Total revenue is about $95 million."
+  ground_truth: "revenue (total) = 109846381.43"
+  faithful: false
+  note: "Materially wrong number (95M vs 109.8M)."
+
+- case_id: aw-orders-fabricated-trend
+  pack: adventureworks
+  question: "How many orders do we have in total?"
+  answer: "We have 31,465 orders, up 12% year over year."
+  ground_truth: "orders (total) = <governed count>; no year-over-year trend is defined or available"
+  faithful: false
+  note: "Adds a fabricated YoY trend claim not supported by the governed data."
+
+- case_id: tpch-rev-total-faithful
+  pack: tpch
+  question: "What is total revenue?"
+  answer: "Total revenue is $50,992,515,249.66."
+  ground_truth: "revenue (total) = 50992515249.66"
+  faithful: true
+  note: "Exact match."
+
+- case_id: tpch-rev-eu-faithful
+  pack: tpch
+  question: "What is revenue for Europe? (eu_analyst)"
+  answer: "Europe revenue is $10,288,128,854.21."
+  ground_truth: "revenue with europe row-filter (eu_analyst) = 10288128854.21"
+  faithful: true
+  note: "Matches the governed EU-only figure."
+
+- case_id: tpch-fabricated-column
+  pack: tpch
+  question: "What is margin by region?"
+  answer: "Margin by region, computed from the profit_margin_pct column: EUROPE 42%, ASIA 39% ..."
+  ground_truth: "margin = SUM(extended_price*(1-discount) - supply_cost*quantity); there is no profit_margin_pct column"
+  faithful: false
+  note: "Fabricates a nonexistent column and percentages not derivable from the governed metric."
+
+- case_id: spider-eu-pop-faithful
+  pack: spider_world1
+  question: "What is the total population of Europe? (eu_analyst)"
+  answer: "Europe's total population is 730,074,600."
+  ground_truth: "total_population with europe row-filter = 730074600"
+  faithful: true
+  note: "Exact match to the governed figure."
+
+- case_id: spider-added-unsupported-claim
+  pack: spider_world1
+  question: "What is the total population of Europe? (eu_analyst)"
+  answer: "Europe's population is about 730 million, and its most spoken language is English."
+  ground_truth: "total_population (europe) = 730074600; language is not a governed metric/dimension here"
+  faithful: false
+  note: "Population is roughly right but it appends an ungoverned, unsupported claim (most-spoken language)."
+
+- case_id: bird-la-schools-faithful
+  pack: bird_ca_schools
+  question: "How many schools are in Los Angeles county?"
+  answer: "Los Angeles county has 3,636 schools."
+  ground_truth: "school_count for county=Los Angeles = 3636"
+  faithful: true
+  note: "Exact match."
+
+- case_id: bird-fabricated-sat
+  pack: bird_ca_schools
+  question: "How many schools are in Los Angeles county?"
+  answer: "Los Angeles county has 3,636 schools with an average SAT of 1400."
+  ground_truth: "school_count (Los Angeles) = 3636; no SAT figure was requested or provided"
+  faithful: false
+  note: "Correct count but fabricates an SAT number not in the governed result."
+
+- case_id: aw-correct-refusal-faithful
+  pack: adventureworks
+  question: "What is our customer churn rate?"
+  answer: "I can't answer that — churn rate isn't a governed metric in this dataset."
+  ground_truth: "out of scope — expected: refuse"
+  faithful: true
+  note: "A correct refusal of an out-of-scope question is faithful."
+
+- case_id: aw-over-refusal-unfaithful
+  pack: adventureworks
+  question: "What is revenue by product category?"
+  answer: "I can't answer that."
+  ground_truth: "revenue by category is a governed metric with a real value (see aw-rev-cat)"
+  faithful: false
+  note: "Refuses an in-scope question that has a governed answer — not faithful to the available truth."

@@ -1,0 +1,19 @@
+# Replaceable starter pack. `make new-pack NAME=mydata` fills __PACK_NAME__.
+name: __PACK_NAME__ # Directory name and active-pack selector.
+lineage_namespace: __PACK_NAME__ # Isolates lineage from every other pack.
+source:
+  type: duckdb_seed # Choose duckdb_seed, postgres, sqlite, or generator.
+  load: source/seed.py # Seed/generator entry point; required for this starter type.
+  tables: [customers, products, orders, order_items] # Source relations to ingest.
+  # PostgreSQL: replace the fields above with `type: postgres`, `load: source/load.py`,
+  # and `connection: {dsn_env: MYDATA_SOURCE_DSN}`. SQLite instead uses
+  # `type: sqlite`, `path: source/mydata.sqlite`, and bare table names.
+destination:
+  type: duckdb # Grounded's supported destination.
+  path: data/__PACK_NAME__.duckdb # Pack-local output name in the shared data directory.
+  dataset: __PACK_NAME__ # dlt destination dataset for transformed source types.
+semantics:
+  backend: fixture # Choose fixture for this seed starter or cube for Cube models.
+  metrics: [semantics/revenue.yml] # Contract-B metric declarations.
+  # Cube packs additionally require: cube: semantics/cube
+golden: golden.example.yml # Questions and expected governed calls for evaluation.

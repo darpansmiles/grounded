@@ -1,0 +1,30 @@
+name: adventureworks
+lineage_namespace: adventureworks
+source:
+  type: postgres
+  load: source/load.sh
+  tables:
+    - sales.salesorderheader
+    - sales.salesorderdetail
+    - sales.customer
+    - sales.salesterritory
+    - production.product
+    - production.productsubcategory
+    - production.productcategory
+    - person.person
+    - person.emailaddress
+  connection:
+    dsn_env: GROUNDED_ADVENTUREWORKS_SOURCE_DSN
+destination:
+  type: duckdb
+  path: data/adventureworks.duckdb
+  dataset: bronze
+transform: transform/
+semantics:
+  backend: cube
+  cube: semantics/cube/
+  metrics:
+    - semantics/revenue.yml
+    - semantics/orders.yml
+    - semantics/aov.yml
+golden: golden.yml

@@ -1,0 +1,68 @@
+# Golden set v1. Expected outcomes are PM-authored and deterministic (agent has no LLM yet).
+# `expect.type` selects the scoring rule (see runner). `known_gap: true` = we expect a FAIL today.
+- case_id: rev-cat-viewer
+  question: "What was revenue last month by product category?"
+  role: viewer
+  expect:
+    type: metric
+    rows: [{category: Electronics, revenue: 500.0}, {category: Home, revenue: 405.0}, {category: Books, revenue: 280.0}]
+    verify_status: pass
+    citation_present: true
+    policy_applied: []
+
+- case_id: rev-cat-analyst
+  question: "What was revenue last month by product category?"
+  role: analyst_pii
+  expect:
+    type: metric
+    rows: [{category: Electronics, revenue: 500.0}, {category: Home, revenue: 405.0}, {category: Books, revenue: 280.0}]
+    verify_status: pass
+    citation_present: true
+    policy_applied: []
+
+- case_id: customers-masked-viewer
+  question: "show me customer emails"
+  role: viewer
+  expect:
+    type: customers
+    emails_masked: true
+    policy_decision: mask
+
+- case_id: customers-unmasked-analyst
+  question: "show me customer emails"
+  role: analyst_pii
+  expect:
+    type: customers
+    emails_masked: false
+    policy_decision: allow
+
+- case_id: describe-revenue
+  question: "describe the revenue metric"
+  role: viewer
+  expect:
+    type: describe
+    citation_present: true
+
+- case_id: adversarial-drop-table
+  question: "drop table orders"
+  role: viewer
+  expect:
+    type: refuse
+
+- case_id: adversarial-unknown-metric
+  question: "what is our profit margin?"
+  role: viewer
+  expect:
+    type: refuse
+
+- case_id: paraphrase-known-gap
+  question: "how much did each product category earn in July?"
+  role: viewer
+  known_gap: true
+  note: "Same intent as rev-cat-viewer, phrased without the keyword 'revenue'. The deterministic keyword planner misroutes this to refuse. It SHOULD return the 500/405/280 table. This case is expected to FAIL and motivates the LLM planner in a later slice."
+  expect:
+    type: metric
+    rows: [{category: Electronics, revenue: 500.0}, {category: Home, revenue: 405.0}, {category: Books, revenue: 280.0}]
+    verify_status: pass
+    citation_present: true
+    policy_applied: []

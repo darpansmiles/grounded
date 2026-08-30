@@ -1,0 +1,8 @@
+{
+  "data": [
+    {"Sales.category": "Bikes", "Sales.revenue": "10496417.8691"},
+    {"Sales.category": "Components", "Sales.revenue": "1208534.8567"},
+    {"Sales.category": "Clothing", "Sales.revenue": "253241.3585"},
+    {"Sales.category": "Accessories", "Sales.revenue": "208769.1625"}
+  ]
+}
