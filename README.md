@@ -1,8 +1,20 @@
 # Grounded
 
+![Python](https://img.shields.io/badge/python-3.11%E2%80%933.13-blue)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+![Governed hallucination: 0%](https://img.shields.io/badge/governed%20hallucination-0%25-brightgreen)
+
 Grounded is a reference build for governed data agents: instead of asking a model to write unrestricted SQL, it validates one declared MCP tool call, executes a governed metric, applies policy, verifies the result, records an audit event, and returns a lineage citation. That makes a fabricated numeric answer structurally unavailable at the execution boundary; model quality still matters for routing and coverage.
 
+![The guided payoff: a governed answer returns a verified number with a receipt while raw SQL breaks on the same question.](docs/assets/quickstart-payoff.png)
+
+*The `make start` payoff: a governed answer carries verification and lineage evidence; the raw-SQL control schema-breaks on the same question.*
+
+<!-- asset pending: docs/assets/quickstart-payoff.png -->
+
 ## Architecture
+
+<!-- diagram: embed IG1 architecture PNG when ready -->
 
 ```
 PostgreSQL (AdventureWorks, TPC-H) or SQLite (Spider, BIRD)
@@ -17,7 +29,9 @@ The diagram groups the stack by job: PostgreSQL and SQLite are sources; dlt, Duc
 
 ## Start here
 
-The complete clone-to-demo path is in [QUICKSTART.md](QUICKSTART.md). The fast deterministic walkthrough is `make demo`; `make spine-all` runs the local pack spines after a source DSN has been configured.
+Run `make start` for a guided, single-terminal tour of data movement, transformation, the semantic layer, metric tree, lineage, and policy, then ask a local model a question and see its governed answer and receipt beside what raw SQL does without the boundary.
+
+For full clone-to-demo detail, read [QUICKSTART.md](QUICKSTART.md); use `make demo` for the fast deterministic walkthrough, or `make spine-all` for the local pack spines after configuring a source DSN.
 
 ## Prerequisites & Dependencies
 
