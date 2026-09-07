@@ -48,7 +48,9 @@ def _load_metric_definition(metric: str) -> dict[str, Any]:
 
 def _verify_status(verification: list[dict]) -> str:
     return (
-        "pass" if all(result["status"] == "pass" for result in verification) else "fail"
+        "pass"
+        if all(result["status"] in {"pass", "n/a"} for result in verification)
+        else "fail"
     )
 
 
@@ -226,6 +228,7 @@ def _governed_ratio(
     verification = verify_result(
         [row for row in rows if row[definition["metric"]] is not None],
         definition.get("verification", []),
+        columns=[*requested_dimensions, definition["metric"]],
     )
     if zero_denominator:
         verification.append(
@@ -317,7 +320,9 @@ def governed_query(
     result["resolved_definition"] = definition
     masked_rows, masking_decisions = apply_masking(result["rows"], definition, role)
     policy_decisions = [*row_decisions, *masking_decisions]
-    verification = verify_result(masked_rows, definition.get("verification", []))
+    verification = verify_result(
+        masked_rows, definition.get("verification", []), columns=result["columns"]
+    )
     verify_status = _verify_status(verification)
     result.update(
         {
@@ -360,7 +365,9 @@ def governed_customers(role: str = "viewer", db_path: str = "grounded.duckdb") -
         connection.close()
 
     masked_rows, policy_decisions = apply_masking(rows, definition, role)
-    verification = verify_result(masked_rows, definition.get("verification", []))
+    verification = verify_result(
+        masked_rows, definition.get("verification", []), columns=columns
+    )
     verify_status = _verify_status(verification)
     result = {
         "read": definition["read"],

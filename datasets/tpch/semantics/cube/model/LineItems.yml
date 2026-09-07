@@ -11,7 +11,10 @@ cubes:
     measures:
       - {name: revenue, sql: "extended_price * (1 - discount)", type: sum, filters: [{sql: "{CUBE}.is_completed = TRUE"}]}
       - {name: orders, sql: order_key, type: count_distinct, filters: [{sql: "{CUBE}.is_completed = TRUE"}]}
+      - {name: units_sold, sql: quantity, type: sum, filters: [{sql: "{CUBE}.is_completed = TRUE"}]}
+      - {name: customers, sql: customer_key, type: count_distinct, filters: [{sql: "{CUBE}.is_completed = TRUE"}]}
       - {name: aov, sql: "{revenue} / NULLIF({orders}, 0)", type: number}
+      - {name: average_unit_price, sql: "{revenue} / NULLIF({units_sold}, 0)", type: number}
       - {name: margin, sql: "extended_price * (1 - discount) - supply_cost * quantity", type: sum, filters: [{sql: "{CUBE}.is_completed = TRUE"}]}
     dimensions:
       - {name: lineitem_key, sql: "CAST(order_key AS VARCHAR) || '-' || CAST(line_number AS VARCHAR)", type: string, primary_key: true, public: false}

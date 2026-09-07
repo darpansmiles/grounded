@@ -1,4 +1,4 @@
-# Golden set (slice 039 expansion): adventureworks, 105 categorized cases.
+# Golden set (slice 039 expansion): adventureworks, 110 categorized cases.
 # category enum: ['total', 'by_dimension', 'by_multi_dimension', 'ranking', 'paraphrase', 'role_governed', 'describe', 'impact', 'policy', 'refuse_out_of_scope', 'refuse_adversarial']
 # Schema: case_id, question, role, category, expected_plan{tool,args}, expect{type[,decision]}.
 # In-scope ground truth = the governed arm (computed at run). Refusal cases expect a refusal.
@@ -1230,3 +1230,43 @@
     args: {}
   expect:
     type: refuse
+- case_id: units-sold-total
+  question: What is our total units sold?
+  role: viewer
+  category: total
+  expected_plan:
+    tool: query_metric
+    args: {metric: units_sold, dimensions: [], filters: {}}
+  expect: {type: metric}
+- case_id: customers-total
+  question: What is the total number of customers?
+  role: viewer
+  category: total
+  expected_plan:
+    tool: query_metric
+    args: {metric: customers, dimensions: [], filters: {}}
+  expect: {type: metric}
+- case_id: average-unit-price-total
+  question: What is the average unit price?
+  role: viewer
+  category: total
+  expected_plan:
+    tool: query_metric
+    args: {metric: average_unit_price, dimensions: [], filters: {}}
+  expect: {type: metric}
+- case_id: revenue-per-customer-total
+  question: What is revenue per customer?
+  role: viewer
+  category: total
+  expected_plan:
+    tool: query_metric
+    args: {metric: revenue_per_customer, dimensions: [], filters: {}}
+  expect: {type: metric}
+- case_id: orders-per-customer-total
+  question: What is orders per customer?
+  role: viewer
+  category: total
+  expected_plan:
+    tool: query_metric
+    args: {metric: orders_per_customer, dimensions: [], filters: {}}
+  expect: {type: metric}

@@ -22,8 +22,27 @@ cubes:
         type: count_distinct
         filters:
           - sql: "{CUBE}.is_completed = TRUE"
+      - name: units_sold
+        sql: quantity
+        type: sum
+        filters:
+          - sql: "{CUBE}.is_completed = TRUE"
+      - name: customers
+        sql: customer_key
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.is_completed = TRUE"
       - name: aov
         sql: "{revenue} / NULLIF({orders}, 0)"
+        type: number
+      - name: average_unit_price
+        sql: "{revenue} / NULLIF({units_sold}, 0)"
+        type: number
+      - name: revenue_per_customer
+        sql: "{revenue} / NULLIF({customers}, 0)"
+        type: number
+      - name: orders_per_customer
+        sql: "{orders} / NULLIF({customers}, 0)"
         type: number
       - name: margin
         sql: "line_total - standard_cost * quantity"

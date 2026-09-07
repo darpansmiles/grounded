@@ -182,7 +182,7 @@ def test_aw_ungoverned_wrong_sql_and_write_rejection_leave_gold_intact():
 def test_golden_v3_has_only_declared_tools_and_metrics():
     cases = load_golden_cases(_GOLDEN)
 
-    assert len(cases) == 105
+    assert len(cases) == 110
     assert {
         case["expected_plan"]["args"]["metric"]
         for case in cases
@@ -191,4 +191,9 @@ def test_golden_v3_has_only_declared_tools_and_metrics():
         "revenue",
         "orders",
         "aov",
+        "units_sold",
+        "customers",
+        "average_unit_price",
+        "revenue_per_customer",
+        "orders_per_customer",
     }

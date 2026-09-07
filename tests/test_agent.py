@@ -7,7 +7,6 @@ import pytest
 from agent.agent import answer
 from scripts.seed_duckdb import seed_database
 
-
 _CITATION = (
     "revenue ← Cube:Sales.revenue ← SQLMesh:gold.fct_sales "
     "← Tables:[gold.fct_sales, silver.stg_sales_order_line, bronze.salesorderdetail] "
@@ -44,7 +43,12 @@ def test_agent_customer_read_masks_then_allows_pii_role(seeded_database):
 def test_agent_refuses_unknown_question_without_database_access():
     result = answer("What is gross margin by channel?")
 
-    assert result == {"message": "I can only answer governed metrics: [aov, orders, revenue]"}
+    assert result == {
+        "message": (
+            "I can only answer governed metrics: [aov, average_unit_price, customers, "
+            "orders, orders_per_customer, revenue, revenue_per_customer, units_sold]"
+        )
+    }
 
 
 def test_agent_does_not_import_resolver_or_duckdb():

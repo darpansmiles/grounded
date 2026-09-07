@@ -37,6 +37,11 @@ def test_adventureworks_pack_resolves_all_declared_capabilities(monkeypatch):
         "revenue.yml",
         "orders.yml",
         "aov.yml",
+        "units_sold.yml",
+        "customers.yml",
+        "average_unit_price.yml",
+        "revenue_per_customer.yml",
+        "orders_per_customer.yml",
     ]
     assert pack.golden == pack.root / "golden.yml"
 

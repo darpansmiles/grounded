@@ -24,6 +24,18 @@ are refused rather than answered with unrestricted SQL.
 
 ## Fetch locally
 
+The guided tour offers this with explicit consent. To run the same pinned
+download and checksum verification yourself, use:
+
+```bash
+make fetch-source DATASET=spider_world1
+```
+
+The command performs the documented fetch below and installs the SQLite file
+only after its SHA-256 matches.
+
+Manual equivalent:
+
 From the repository root, download the pinned file and verify it before running
 this pack:
 

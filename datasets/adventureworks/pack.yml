@@ -27,4 +27,9 @@ semantics:
     - semantics/revenue.yml
     - semantics/orders.yml
     - semantics/aov.yml
+    - semantics/units_sold.yml
+    - semantics/customers.yml
+    - semantics/average_unit_price.yml
+    - semantics/revenue_per_customer.yml
+    - semantics/orders_per_customer.yml
 golden: golden.yml

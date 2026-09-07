@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from decimal import Decimal
-
 import pytest
 
 from harness.tools import check_policy, describe_metric, list_metrics, query_metric
 from resolver.metric_resolver import UnknownMetricError
 from scripts.seed_duckdb import seed_database
-
 
 _CITATION = (
     "revenue ← Cube:Sales.revenue ← SQLMesh:gold.fct_sales "
@@ -31,9 +28,27 @@ def test_list_metrics_excludes_governed_entity_reads():
             "owner": "darpan",
         },
         {
+            "metric": "average_unit_price",
+            "label": "Average Unit Price",
+            "description": "Revenue per completed unit sold.",
+            "owner": "darpan",
+        },
+        {
+            "metric": "customers",
+            "label": "Customers",
+            "description": "Distinct customers with a completed order.",
+            "owner": "darpan",
+        },
+        {
             "metric": "orders",
             "label": "Orders",
             "description": "Count of distinct completed orders.",
+            "owner": "darpan",
+        },
+        {
+            "metric": "orders_per_customer",
+            "label": "Orders per Customer",
+            "description": "Completed orders divided by distinct customers with a completed order.",
             "owner": "darpan",
         },
         {
@@ -41,7 +56,19 @@ def test_list_metrics_excludes_governed_entity_reads():
             "label": "Revenue",
             "description": "Gross merchandise revenue from completed order items.",
             "owner": "darpan",
-        }
+        },
+        {
+            "metric": "revenue_per_customer",
+            "label": "Revenue per Customer",
+            "description": "Revenue divided by distinct customers with a completed order.",
+            "owner": "darpan",
+        },
+        {
+            "metric": "units_sold",
+            "label": "Units Sold",
+            "description": "Total units on completed sales-order lines.",
+            "owner": "darpan",
+        },
     ]
 
 

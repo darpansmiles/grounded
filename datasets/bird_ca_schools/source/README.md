@@ -27,6 +27,18 @@ surface are not treated as unrestricted SQL requests.
 
 ## Fetch locally
 
+The guided tour offers this with explicit consent. To run the same pinned
+download and checksum verification yourself, use:
+
+```bash
+make fetch-source DATASET=bird_ca_schools
+```
+
+The command performs the documented fetch below and installs the SQLite file
+only after its SHA-256 matches.
+
+Manual equivalent:
+
 From the repository root, download the pinned archive, extract only this
 database, and verify it before running this pack:
 

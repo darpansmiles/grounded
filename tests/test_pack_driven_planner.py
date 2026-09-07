@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+import yaml
+
 from agent.agent import plan
 from agent.llm_planner import system_prompt, validate_model_output
 from evals.benchmark import run_benchmark
@@ -70,8 +75,41 @@ def test_adventureworks_prompt_and_validation_keep_its_declared_surface(monkeypa
         },
     }
 
-    assert 'one of ["revenue", "orders", "aov"]' in system_prompt()
+    assert 'one of ["revenue", "orders", "aov", "units_sold", "customers", "average_unit_price", "revenue_per_customer", "orders_per_customer"]' in system_prompt()
     assert validate_model_output(plan) == plan
+
+
+@pytest.mark.parametrize(
+    ("pack", "metrics"),
+    [
+        (
+            "adventureworks",
+            {
+                "units_sold",
+                "customers",
+                "average_unit_price",
+                "revenue_per_customer",
+                "orders_per_customer",
+            },
+        ),
+        ("tpch", {"units_sold", "customers", "average_unit_price", "margin"}),
+    ],
+)
+def test_expanded_metrics_have_governed_definitions_and_routable_golden_questions(
+    monkeypatch, pack, metrics
+):
+    monkeypatch.setenv("GROUNDED_PACK", pack)
+    cases = yaml.safe_load(Path("datasets", pack, "golden.yml").read_text(encoding="utf-8"))
+    metric_cases = {
+        case["expected_plan"]["args"]["metric"]: case
+        for case in cases
+        if case["expected_plan"]["tool"] == "query_metric"
+        and case["expected_plan"]["args"]["metric"] in metrics
+    }
+
+    assert set(metric_cases) == metrics
+    for metric, case in metric_cases.items():
+        assert plan(case["question"]) == case["expected_plan"], metric
 
 
 def test_benchmark_renders_the_active_pack_prompt(tmp_path):

@@ -14,9 +14,9 @@ The data is attributed to the [BIRD benchmark](https://bird-bench.github.io)
 archive. The extracted `california_schools.sqlite` file has SHA-256
 `c0903eec662e63068fd1d14403d3d6c1d473287fc10c4356333ea58f878db983`.
 
-The raw SQLite file is intentionally not committed. The exact archive path,
-fetch command, and checksum verification are in
-[source/README.md](source/README.md).
+The raw SQLite file is intentionally not committed. Fetch and verify it with
+`make fetch-source DATASET=bird_ca_schools`, or see the exact archive path and
+manual equivalent in [source/README.md](source/README.md).
 
 ## Governed surface
 

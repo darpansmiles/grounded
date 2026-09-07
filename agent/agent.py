@@ -37,15 +37,13 @@ def _matching_metric(question: str, metrics: dict[str, dict[str, Any]]) -> str |
     question_terms = _terms(question)
     scored = [
         (
-            len(
-                question_terms
-                & (_terms(metric) | _terms(str(details.get("label", ""))))
-            ),
+            len(question_terms & (_terms(metric) | _terms(str(details.get("label", ""))))),
+            -len(_terms(metric) | _terms(str(details.get("label", "")))),
             metric,
         )
         for metric, details in metrics.items()
     ]
-    score, metric = max(scored, default=(0, ""))
+    score, _specificity, metric = max(scored, default=(0, 0, ""))
     return metric if score else None
 
 
@@ -55,7 +53,9 @@ def plan(question: str) -> dict:
     vocabulary = planner_vocabulary()
     if any(term in normalized for term in ("drop", "delete", "truncate", "alter", "insert", "update")):
         return {"tool": "refuse", "args": {}}
-    if "customer" in normalized or "email" in normalized:
+    if "customer" in normalized and any(
+        phrase in normalized for phrase in ("directory", "email", "emails")
+    ):
         return {"tool": "query_customers", "args": {}}
     metric = _matching_metric(question, vocabulary["metrics"])
     if metric is not None and any(
@@ -92,6 +92,8 @@ def plan(question: str) -> dict:
         )
         if target is not None:
             return {"tool": "check_policy", "args": {"target": target, "role": "viewer"}}
+    if metric is None and ("customer" in normalized or "email" in normalized):
+        return {"tool": "query_customers", "args": {}}
     if metric is None:
         return {"tool": "refuse", "args": {}}
     declaration = vocabulary["metrics"][metric]
@@ -164,6 +166,7 @@ def _execute_tool_call(
             "answer_rows": payload["rows"],
             "metric_definition": payload["metric_definition"],
             "policy_applied": payload["policy_decisions"],
+            "verification": payload.get("verification", []),
             "verify_status": payload["verify_status"],
             "lineage_citation": payload["lineage_citation"],
         }

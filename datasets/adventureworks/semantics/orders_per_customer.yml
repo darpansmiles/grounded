@@ -1,0 +1,11 @@
+metric: orders_per_customer
+label: Orders per Customer
+description: Completed orders divided by distinct customers with a completed order.
+owner: darpan
+definition:
+  derived: ratio
+  numerator: orders
+  denominator: customers
+inherits: [orders, customers]
+verification:
+  - {type: non_negative, field: orders_per_customer}

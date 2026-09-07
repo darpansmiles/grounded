@@ -1,0 +1,11 @@
+metric: average_unit_price
+label: Average Unit Price
+description: Revenue per completed unit sold.
+owner: darpan
+definition:
+  derived: ratio
+  numerator: revenue
+  denominator: units_sold
+inherits: [revenue, units_sold]
+verification:
+  - {type: non_negative, field: average_unit_price}

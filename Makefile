@@ -12,6 +12,16 @@ export GROUNDED_PACK := $(DATASET)
 export COMPOSE_PROJECT_NAME := $(COMPOSE_PROJECT)
 export SOURCE_HOST_PORT
 export CUBE_HOST_PORT
+ifneq (,$(filter start,$(MAKECMDGOALS)))
+PACK_SOURCE_LOAD :=
+PACK_SOURCE_TYPE :=
+PACK_HAS_TRANSFORM :=
+PACK_SEMANTICS_BACKEND :=
+PACK_TRANSFORM :=
+PACK_DESTINATION :=
+GROUNDED_PACK_DATABASE :=
+GROUNDED_PACK_SEMANTICS :=
+else
 PACK_SOURCE_LOAD := $(shell GROUNDED_PACK=$(DATASET) $(PYTHON) -m packlib source_load_or_empty)
 PACK_SOURCE_TYPE := $(shell GROUNDED_PACK=$(DATASET) $(PYTHON) -m packlib source_type)
 PACK_HAS_TRANSFORM := $(shell GROUNDED_PACK=$(DATASET) $(PYTHON) -m packlib has_transform)
@@ -20,10 +30,11 @@ PACK_TRANSFORM = $(shell GROUNDED_PACK=$(DATASET) $(PYTHON) -m packlib transform
 PACK_DESTINATION = $(shell GROUNDED_PACK=$(DATASET) $(PYTHON) -m packlib destination)
 GROUNDED_PACK_DATABASE := $(notdir $(PACK_DESTINATION))
 GROUNDED_PACK_SEMANTICS := $(shell GROUNDED_PACK=$(DATASET) $(PYTHON) -m packlib semantics_cube_or_empty)
+endif
 export GROUNDED_PACK_SEMANTICS
 export GROUNDED_PACK_DATABASE
 
-.PHONY: demo test benchmark benchmark-all lakehouse new-pack validate-pack release-scrub set-secret preflight-spine preflight-benchmark source-up source-load source-verify ingest bronze-verify transform cube-up down lineage lineage-view marquez-up benchmark-aw spine spine-all _require-docker _require-postgres _require-cube _require-ollama _require-source-dsn _free-conflicting-cube
+.PHONY: demo test start benchmark benchmark-all lakehouse new-pack validate-pack release-scrub set-secret fetch-source preflight-spine preflight-benchmark source-up source-load source-verify ingest bronze-verify transform cube-up down lineage lineage-view marquez-up benchmark-aw spine spine-all _require-docker _require-postgres _require-cube _require-ollama _require-source-dsn _free-conflicting-cube
 
 new-pack:
 	PYTHONPATH=$(ROOT) $(PYTHON) scripts/new_pack.py $(NAME)
@@ -33,6 +44,14 @@ validate-pack:
 
 set-secret:
 	$(PYTHON) scripts/set_secret.py
+
+fetch-source:
+	$(PYTHON) scripts/fetch_source.py $(DATASET)
+
+start:
+	@test -x "$(PYTHON)" || python3 -m venv .venv
+	$(PYTHON) -m pip install --quiet --no-build-isolation -e . || $(PYTHON) -m pip install --quiet -e .
+	$(PYTHON) -m governed.cli.start
 
 preflight-spine:
 	$(PYTHON) scripts/preflight.py --dataset $(DATASET) --run spine
@@ -148,7 +167,7 @@ down:
 	$(COMPOSE) down
 
 marquez-up: _require-docker
-	docker compose -f infra/docker-compose.yml up -d marquez-web
+	docker compose -f infra/docker-compose.yml up -d --wait marquez-web
 
 lineage:
 ifeq ($(PACK_SEMANTICS_BACKEND),cube)

@@ -28,4 +28,7 @@ semantics:
     - semantics/orders.yml
     - semantics/aov.yml
     - semantics/margin.yml
+    - semantics/units_sold.yml
+    - semantics/customers.yml
+    - semantics/average_unit_price.yml
 golden: golden.yml

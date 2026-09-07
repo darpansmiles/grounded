@@ -16,8 +16,12 @@ dependencies = [
   "psutil>=7.2",
   "psycopg2-binary>=2.9",
   "pytest>=9.0",
+  "rich>=15.0",
   "sqlmesh>=0.236",
 ]
+
+[project.scripts]
+grounded = "governed.cli.start:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

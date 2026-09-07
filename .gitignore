@@ -38,5 +38,6 @@ evals/results/*.md
 evals/benchmark.json
 evals/model_card.json
 audit.log.jsonl
+.grounded/
 grounded_graph/
 *_graph/

@@ -13,8 +13,9 @@ the pinned `Chinastark/spider_datasets` mirror revision
 Its SHA-256 is
 `17b986695f16786d58d66f85e49dba87bdfe72953207ab9b1b49da9d2301ef65`.
 
-The raw SQLite file is intentionally not committed. The complete fetch and
-verification instructions are in [source/README.md](source/README.md).
+The raw SQLite file is intentionally not committed. Fetch and verify it with
+`make fetch-source DATASET=spider_world1`, or see the manual equivalent in
+[source/README.md](source/README.md).
 
 ## Governed surface
 

@@ -50,7 +50,11 @@ def test_system_prompt_has_tool_schemas_and_active_pack_vocabulary():
     assert "query_metric:" in SYSTEM_PROMPT
     assert "check_policy:" in SYSTEM_PROMPT
     assert "describe_metric:" in SYSTEM_PROMPT
-    assert 'one of ["revenue", "orders", "aov"]' in SYSTEM_PROMPT
+    assert (
+        'one of ["revenue", "orders", "aov", "units_sold", "customers", '
+        '"average_unit_price", "revenue_per_customer", "orders_per_customer"]'
+        in SYSTEM_PROMPT
+    )
     assert 'dimensions: a subset of ["category", "country", "order_month"] (or [])' in SYSTEM_PROMPT
     assert 'filters: {} or {"order_month": "last_month"}' in SYSTEM_PROMPT
     assert '"metric":"revenue","dimensions":["category"],"filters":{}' in SYSTEM_PROMPT

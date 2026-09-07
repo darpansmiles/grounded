@@ -1,0 +1,11 @@
+metric: revenue_per_customer
+label: Revenue per Customer
+description: Revenue divided by distinct customers with a completed order.
+owner: darpan
+definition:
+  derived: ratio
+  numerator: revenue
+  denominator: customers
+inherits: [revenue, customers]
+verification:
+  - {type: non_negative, field: revenue_per_customer}

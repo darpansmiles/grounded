@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -12,31 +10,29 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-SECRET_NAME = "GROUNDED_ADVENTUREWORKS_SOURCE_DSN"
-TPCH_SECRET_NAME = "GROUNDED_TPCH_SOURCE_DSN"
-SOURCE_SECRET_NAMES = (SECRET_NAME, TPCH_SECRET_NAME)
-SECRETS_PATH = Path(".dlt/secrets.toml")
+from governed.cli.secrets import (
+    LOCAL_SOURCE_DSNS,
+    SECRET_NAME,
+    SECRETS_PATH,
+    SOURCE_SECRET_NAMES,
+    TPCH_SECRET_NAME,
+    ensure_local_source_dsns,
+    local_source_dsns,
+    write_source_dsn,
+    write_source_dsns,
+)
 
-
-def write_source_dsn(
-    value: str, path: Path = SECRETS_PATH, *, name: str = SECRET_NAME
-) -> None:
-    """Update one source-DSN key while preserving unrelated secret entries."""
-    if not value:
-        raise ValueError(f"{name} must not be empty")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    line = f"{name} = {json.dumps(value)}"
-    contents = path.read_text(encoding="utf-8") if path.exists() else ""
-    pattern = re.compile(rf"(?m)^{re.escape(name)}\s*=.*$")
-    updated = pattern.sub(line, contents) if pattern.search(contents) else contents.rstrip() + f"\n{line}\n"
-    path.write_text(updated, encoding="utf-8")
-
-
-def write_source_dsns(values: dict[str, str], path: Path = SECRETS_PATH) -> None:
-    """Persist every declared PostgreSQL source DSN in one local secrets file."""
-    for name in SOURCE_SECRET_NAMES:
-        write_source_dsn(values.get(name, ""), path, name=name)
-
+__all__ = (
+    "LOCAL_SOURCE_DSNS",
+    "SECRETS_PATH",
+    "SECRET_NAME",
+    "SOURCE_SECRET_NAMES",
+    "TPCH_SECRET_NAME",
+    "ensure_local_source_dsns",
+    "local_source_dsns",
+    "write_source_dsn",
+    "write_source_dsns",
+)
 
 if __name__ == "__main__":
     dsns = {name: os.environ.get(name, "") for name in SOURCE_SECRET_NAMES}

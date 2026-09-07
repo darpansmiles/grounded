@@ -7,7 +7,11 @@ import pytest
 from governed import service
 from governed.service import governed_query
 from harness.tools import describe_metric, list_metrics
-from resolver.metric_resolver import UnknownMetricError, _compile_measure, resolve_and_run
+from resolver.metric_resolver import (
+    UnknownMetricError,
+    _compile_measure,
+    resolve_and_run,
+)
 from scripts.seed_duckdb import seed_database
 from semantics.loader import load_expanded_definition
 
@@ -123,7 +127,41 @@ def test_zero_denominator_returns_null_with_a_verification_note(tmp_path, monkey
 
 
 def test_list_metrics_includes_the_metric_tree():
-    assert {definition["metric"] for definition in list_metrics()} == {"revenue", "orders", "aov"}
+    assert {definition["metric"] for definition in list_metrics()} == {
+        "revenue",
+        "orders",
+        "aov",
+        "units_sold",
+        "customers",
+        "average_unit_price",
+        "revenue_per_customer",
+        "orders_per_customer",
+    }
+
+
+@pytest.mark.parametrize(
+    ("pack", "metric", "parents"),
+    [
+        ("adventureworks", "average_unit_price", ("revenue", "units_sold")),
+        ("adventureworks", "revenue_per_customer", ("revenue", "customers")),
+        ("adventureworks", "orders_per_customer", ("orders", "customers")),
+        ("tpch", "average_unit_price", ("revenue", "units_sold")),
+    ],
+)
+def test_expanded_derived_metrics_inherit_compatible_dimensions_and_policies(
+    monkeypatch, pack, metric, parents
+):
+    monkeypatch.setenv("GROUNDED_PACK", pack)
+
+    definition = load_expanded_definition(metric)
+
+    assert tuple(definition["inherits"]) == parents
+    assert definition["dimensions"]
+    assert definition["policies"]
+    for parent in parents:
+        parent_definition = load_expanded_definition(parent)
+        assert all(dimension in definition["dimensions"] for dimension in parent_definition["dimensions"])
+        assert all(policy in definition["policies"] for policy in parent_definition["policies"])
 
 
 def test_undeclared_measure_forms_are_rejected():
