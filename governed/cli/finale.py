@@ -13,6 +13,7 @@ import yaml
 
 from agent.agent import answer
 from agent.ungoverned import answer_ungoverned, pack_schema_prompt
+from governed.cli.narration import ROUTING_ANNOTATIONS
 from models.provider import OllamaProvider, ProviderUnavailable
 from packlib import Pack, load_pack
 
@@ -48,10 +49,10 @@ def _format(value: Any) -> str:
     return f"{value:.2f}" if isinstance(value, (float, Decimal)) else str(value)
 
 
-def _show_governed(result: dict[str, Any], *, output: Output) -> None:
+def _show_governed(result: dict[str, Any], *, output: Output) -> str:
     if "message" in result:
         output(f"Governed result: REFUSED · {result['message']}")
-        return
+        return "refuse"
     output("Governed result: one declared call, with a receipt")
     for row in result.get("answer_rows", []):
         output("  " + " | ".join(f"{key}: {_format(value)}" for key, value in row.items()))
@@ -66,6 +67,21 @@ def _show_governed(result: dict[str, Any], *, output: Output) -> None:
         )
     if result.get("lineage_citation"):
         output(f"  Lineage: {result['lineage_citation']}")
+    if result.get("verify_status") is not None:
+        return "query_metric"
+    if result.get("metric_definition"):
+        return "describe_metric"
+    answer_rows = result.get("answer_rows", [])
+    if answer_rows and all("metric" in row for row in answer_rows):
+        return "list_metrics"
+    return "other"
+
+
+def _show_routing_annotation(outcome: str, *, output: Output) -> None:
+    """Explain a declared non-metric call without changing the model's route."""
+    annotation = ROUTING_ANNOTATIONS.get(outcome)
+    if annotation:
+        output(annotation)
 
 
 def _show_ungoverned(result: dict[str, Any], *, output: Output) -> None:
@@ -138,7 +154,8 @@ def run_interactive_finale(
                         cube_url=os.environ.get("GROUNDED_CUBE_URL"),
                         db_path=str(pack.destination.path),
                     )
-                    _show_governed(governed, output=output)
+                    outcome = _show_governed(governed, output=output)
+                    _show_routing_annotation(outcome, output=output)
                     control_prompt = (
                         pack_schema_prompt(str(pack.destination.path), pack.name, pack.transform_dir is not None)
                         if pack.semantics and pack.semantics.backend == "cube"

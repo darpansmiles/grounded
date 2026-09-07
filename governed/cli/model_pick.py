@@ -10,6 +10,38 @@ Input = Callable[[str], str]
 Output = Callable[[str], None]
 CommandRunner = Callable[..., Any]
 
+MODEL_PREFERENCE = (
+    "phi4",
+    "qwen2.5:14b",
+    "qwen2.5:7b",
+    "gemma2:9b",
+    "llama3.1:8b",
+    "mistral:7b",
+    "qwen2.5:3b",
+    "llama3.2:3b",
+    "phi3.5",
+)
+
+
+def _model_key(model: str) -> str:
+    """Compare a model name with or without its conventional ``:latest`` tag."""
+    return model.casefold().removesuffix(":latest")
+
+
+def _installed_model(choice: str, models: list[str]) -> str | None:
+    """Return the installed spelling for a selected model, if any."""
+    choice_key = _model_key(choice)
+    return next((model for model in models if _model_key(model) == choice_key), None)
+
+
+def recommended_model(models: list[str]) -> str | None:
+    """Choose the strongest declared preference that is actually installed."""
+    for preferred in MODEL_PREFERENCE:
+        installed = _installed_model(preferred, models)
+        if installed is not None:
+            return installed
+    return models[0] if models else None
+
 
 def installed_models(*, runner: CommandRunner = subprocess.run) -> list[str] | None:
     """Return installed Ollama models, or ``None`` when Ollama cannot be reached."""
@@ -33,21 +65,32 @@ def choose_model(
         return None
     if models:
         output("\nPart 2 of 3 · The test · Choose a local model")
+        default_model = recommended_model(models)
         for number, model in enumerate(models, start=1):
-            default = " (recommended default)" if number == 1 else ""
+            default = " (recommended default)" if model == default_model else ""
             output(f"  {number}. {model}{default}")
     else:
+        default_model = None
         output("No local Ollama models are installed yet.")
     try:
-        choice = input_func("Choose a number, type a model name to pull, or q to skip the test: ").strip()
+        choice = input_func(
+            "Choose a number, press Enter for the recommended model, type a model name to pull, or q to skip the test: "
+        ).strip()
     except (EOFError, KeyboardInterrupt):
         return None
-    if choice.casefold() in {"q", "quit", ""}:
+    if choice.casefold() in {"q", "quit"}:
         return None
+    if not choice and default_model is not None:
+        output(f"Using local model: {default_model}")
+        return default_model
     if choice.isdigit() and 1 <= int(choice) <= len(models):
         selected = models[int(choice) - 1]
         output(f"Using local model: {selected}")
         return selected
+    installed = _installed_model(choice, models)
+    if installed is not None:
+        output(f"Using local model: {installed}")
+        return installed
     selected = choice
     try:
         consent = input_func(f"Pull `{selected}` from Ollama now? [y/N] ").strip().lower()

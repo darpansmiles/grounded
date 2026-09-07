@@ -11,6 +11,33 @@ FULL_TOUR_NARRATION = {
     "policy": "Policy is applied before execution, not added as a note after a result. The declared rules decide which fields are masked and which rows a role may see. You will see the concrete role decisions that bound an answer.",
 }
 
+
+def metric_tree_bridge(base_parents: list[str]) -> str:
+    """Connect the semantic catalog to the subset that composes ratios."""
+    return (
+        "The other declared metrics — "
+        + ", ".join(base_parents)
+        + " — are the base parents these ratios compose from (listed in the semantic layer above)."
+    )
+
+
+ROUTING_ANNOTATIONS = {
+    "list_metrics": (
+        "The model chose to list metrics, not to compute a value. The harness executed exactly that "
+        "declared call. No number was fabricated: this is a routing choice, not a hallucination.\n"
+        "Smaller models make this choice more often; try the recommended default to see the computed answer."
+    ),
+    "describe_metric": (
+        "The model chose to describe a metric, not to compute a value. The harness executed exactly that "
+        "declared call. No number was fabricated: this is a routing choice, not a hallucination.\n"
+        "Smaller models make this choice more often; try the recommended default to see the computed answer."
+    ),
+    "refuse": (
+        "The model returned a structured refusal, so the harness did not execute an ungoverned fallback. "
+        "No number was fabricated."
+    ),
+}
+
 QUICK_RUN_NARRATION = (
     "This is a ready-to-use SQLite pack, so movement and transformation do not run here. "
     "We go straight to its declared semantic layer."

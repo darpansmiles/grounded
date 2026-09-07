@@ -14,6 +14,7 @@ from governed.cli.narration import (
     FIXTURE_NARRATION,
     FULL_TOUR_NARRATION,
     QUICK_RUN_NARRATION,
+    metric_tree_bridge,
 )
 from governed.cli.style import Presenter
 from harness.citation import render_citation
@@ -144,7 +145,8 @@ def _show_metric_tree(definitions: list[dict[str, Any]], *, presenter: Presenter
         return False
 
     parents = {definition["metric"]: definition for definition in definitions}
-    lines: list[str] = []
+    base_parents = _derived_base_parents(definitions, derived_metrics)
+    lines = [f"Base parents: {', '.join(base_parents)}"]
     for derived in derived_metrics:
         numerator = derived["definition"]["numerator"]
         denominator = derived["definition"]["denominator"]
@@ -158,8 +160,29 @@ def _show_metric_tree(definitions: list[dict[str, Any]], *, presenter: Presenter
         lines.extend([f"{derived['label']} = {numerator} / {denominator}", f"  Parents: {numerator}, {denominator}"])
         if inherited_policies:
             lines.append(f"  Inherited policy: {', '.join(inherited_policies)} is carried from the declared parents.")
-    presenter.panel("Declared metric tree", lines)
+    presenter.panel(
+        f"Metric tree — {len(derived_metrics)} derived ratios composed from declared base parents",
+        lines,
+    )
     return True
+
+
+def _derived_base_parents(
+    definitions: list[dict[str, Any]], derived_metrics: list[dict[str, Any]] | None = None
+) -> list[str]:
+    """Return declared parents of ratio metrics in semantic-contract order."""
+    ratios = derived_metrics or [
+        definition for definition in definitions if definition.get("definition", {}).get("derived") == "ratio"
+    ]
+    parent_metrics = {
+        parent
+        for derived in ratios
+        for parent in (
+            derived["definition"]["numerator"],
+            derived["definition"]["denominator"],
+        )
+    }
+    return [definition["metric"] for definition in definitions if definition["metric"] in parent_metrics]
 
 
 def _show_policy(definitions: list[dict[str, Any]], *, presenter: Presenter) -> None:
@@ -256,6 +279,9 @@ def run_stage_walk(
 
     _header(4 if is_full_tour else 2, total, "Metric tree", presenter=presenter)
     output(FULL_TOUR_NARRATION["metric_tree"])
+    base_parents = _derived_base_parents(definitions)
+    if base_parents:
+        output(metric_tree_bridge(base_parents))
     _show_metric_tree(definitions, presenter=presenter)
     if not _continue(input_func=input_func, output=output, presenter=presenter, done="showed the declared metric composition and inherited governance.", next_step="inspect the evidence path that supports a declared answer."):
         return 1

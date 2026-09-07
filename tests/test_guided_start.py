@@ -281,6 +281,8 @@ def test_full_tour_runs_existing_targets_and_shows_declared_artifacts():
     assert "bronze.salesorderdetail" in report
     assert "gold.fct_sales" in report
     assert "Average Order Value = revenue / orders" in report
+    assert "Metric tree — 4 derived ratios composed from declared base parents" in report
+    assert "revenue, orders, units_sold, customers" in report
     assert "Marquez was not started" in report
     assert "customers.email | viewer | mask" in report
 
@@ -376,6 +378,95 @@ def test_model_picker_uses_installed_model():
 
     assert selected == "local-model"
     assert "recommended default" in "\n".join(messages)
+
+
+def test_model_picker_matches_typed_installed_name_and_latest_suffix_without_pulling():
+    messages: list[str] = []
+    calls: list[list[str]] = []
+
+    selected = model_pick.choose_model(
+        input_func=lambda _prompt: "phi4:latest",
+        output=messages.append,
+        runner=lambda command, **_kwargs: calls.append(command)
+        or _result(0, "NAME ID SIZE\nphi4 latest 1GB\n"),
+    )
+
+    assert selected == "phi4"
+    assert calls == [["ollama", "list"]]
+    assert "Using local model: phi4" in "\n".join(messages)
+    assert model_pick._installed_model("phi4", ["phi4:latest"]) == "phi4:latest"
+
+
+def test_model_picker_recommends_highest_preference_and_enter_selects_it():
+    messages: list[str] = []
+
+    selected = model_pick.choose_model(
+        input_func=lambda _prompt: "",
+        output=messages.append,
+        runner=lambda *_args, **_kwargs: _result(
+            0,
+            "NAME ID SIZE\nllama3.2:3b abc 1GB\nphi4:latest def 2GB\nlocal-model ghi 1GB\n",
+        ),
+    )
+
+    assert selected == "phi4:latest"
+    report = "\n".join(messages)
+    assert "phi4:latest (recommended default)" in report
+    assert "llama3.2:3b (recommended default)" not in report
+    assert "Using local model: phi4:latest" in report
+
+
+def test_finale_annotates_list_describe_and_refusal_without_touching_query_metric_output():
+    list_messages: list[str] = []
+    list_outcome = finale._show_governed(
+        {"answer_rows": [{"metric": "revenue"}], "policy_applied": [], "verification": []},
+        output=list_messages.append,
+    )
+    finale._show_routing_annotation(list_outcome, output=list_messages.append)
+    assert list_outcome == "list_metrics"
+    assert "routing choice, not a hallucination" in "\n".join(list_messages)
+    assert "No number was fabricated" in "\n".join(list_messages)
+
+    describe_messages: list[str] = []
+    describe_outcome = finale._show_governed(
+        {"answer_rows": [], "metric_definition": {"metric": "revenue"}, "policy_applied": []},
+        output=describe_messages.append,
+    )
+    finale._show_routing_annotation(describe_outcome, output=describe_messages.append)
+    assert describe_outcome == "describe_metric"
+    assert "describe a metric, not to compute a value" in "\n".join(describe_messages)
+
+    refusal_messages: list[str] = []
+    refusal_outcome = finale._show_governed({"message": "forbidden by policy"}, output=refusal_messages.append)
+    finale._show_routing_annotation(refusal_outcome, output=refusal_messages.append)
+    assert refusal_outcome == "refuse"
+    assert "structured refusal" in "\n".join(refusal_messages)
+
+    query_messages: list[str] = []
+    query_outcome = finale._show_governed(
+        {"answer_rows": [{"revenue": 1.0}], "policy_applied": [], "verify_status": "pass", "verification": []},
+        output=query_messages.append,
+    )
+    finale._show_routing_annotation(query_outcome, output=query_messages.append)
+    assert query_outcome == "query_metric"
+    assert "routing choice" not in "\n".join(query_messages)
+
+
+def test_stale_container_cleanup_uses_plain_text_table_when_output_is_captured():
+    messages: list[str] = []
+
+    start.offer_stale_container_cleanup(
+        input_func=lambda _prompt: "n",
+        output=messages.append,
+        runner=lambda *_args, **_kwargs: _result(
+            0, "grounded-cube\tcubejs/cube:latest\t0.0.0.0:4000->4000/tcp\n"
+        ),
+    )
+
+    report = "\n".join(messages)
+    assert "Artifact: Leftover Grounded containers" in report
+    assert "Name | Image | Ports" in report
+    assert "grounded-cube | cubejs/cube:latest | 0.0.0.0:4000->4000/tcp" in report
 
 
 def test_payoff_and_optional_proof_run_before_fixture_completion(monkeypatch):

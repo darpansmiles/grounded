@@ -16,6 +16,7 @@ from typing import Any
 
 from governed.cli.narration import LANDING_SPLASH
 from governed.cli.secrets import ensure_local_source_dsns, local_source_dsns
+from governed.cli.style import Presenter
 from governed.cli.tour import run_dataset_step
 
 GIB = 1024**3
@@ -109,7 +110,15 @@ def _docker_container_using_port(port: int, runner: CommandRunner) -> str | None
 def _leftover_grounded_containers(runner: CommandRunner) -> list[str]:
     """Return stopped or running Grounded containers left by an earlier local run."""
     result = _run(
-        ["docker", "ps", "-a", "--filter", "name=grounded-", "--format", "{{.Names}}\t{{.Ports}}"],
+        [
+            "docker",
+            "ps",
+            "-a",
+            "--filter",
+            "name=grounded-",
+            "--format",
+            "{{.Names}}\t{{.Image}}\t{{.Ports}}",
+        ],
         runner,
     )
     if result is None or result.returncode != 0:
@@ -125,8 +134,11 @@ def offer_stale_container_cleanup(
     if not leftovers:
         return
     output(f"Found {len(leftovers)} leftover Grounded container(s) from previous runs:")
-    for container in leftovers:
-        output(f"  {container}")
+    Presenter(output).table(
+        "Leftover Grounded containers",
+        ["Name", "Image", "Ports"],
+        [line.split("\t", 2) for line in leftovers],
+    )
     try:
         answer = input_func("Remove them now? [y/N] ").strip().lower()
     except (EOFError, KeyboardInterrupt):
