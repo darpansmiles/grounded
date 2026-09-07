@@ -31,6 +31,9 @@ docs/program-v2-commodity-and-rigor.md
 docs/spider-bird-pack-design.md
 docs/tpch-pack-design.md
 docs/ai-pm-roadmap-alignment.md
+docs/first-user-feedback.md
+docs/enterprise-ai-problem-statement.md
+docs/grounded-problem-solution-mapping.md
 
 # Raw benchmark payloads are local; keep the small Markdown result summaries tracked.
 evals/results/*.json
