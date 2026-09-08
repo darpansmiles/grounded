@@ -13,16 +13,19 @@ from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, nullcontext
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from functools import wraps
 from math import ceil
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 import yaml
 
-from agent.agent import plan
+from agent.agent import _execute_tool_call, plan
 from agent.llm_planner import parse_model_output, system_prompt, validate_model_output
+from agent.ungoverned import answer_ungoverned, pack_schema_prompt
 from evals.resources import ResourceSampler, process_resource_sampler
 from evals.roster import model_roster
 from evals.routing import score_routing
@@ -67,6 +70,40 @@ class ModelTimeout(RuntimeError):
     """Raised when one model exceeds its benchmark wall-clock budget."""
 
 
+class CaptureWriter:
+    """Append complete model-inference records so scoring can run offline later."""
+
+    def __init__(self, path: str | Path, metadata: dict[str, Any]) -> None:
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = Lock()
+        self.path.write_text(
+            _json_line({"record_type": "manifest", "schema_version": 1, **metadata}),
+            encoding="utf-8",
+        )
+
+    def write(self, record: dict[str, Any]) -> None:
+        with self._lock, self.path.open("a", encoding="utf-8") as capture_file:
+            capture_file.write(_json_line({"record_type": "case", **record}))
+
+
+def _json_safe(value: Any) -> Any:
+    """Make captured runtime artifacts JSON serializable without truncating them."""
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
+def _json_line(record: dict[str, Any]) -> str:
+    return json.dumps(_json_safe(record), sort_keys=True) + "\n"
+
+
 def resolve_model_timeout_seconds(explicit: float | None = None) -> float:
     """Resolve CLI, environment, then default per-model timeout precedence."""
     value = (
@@ -77,7 +114,9 @@ def resolve_model_timeout_seconds(explicit: float | None = None) -> float:
     try:
         seconds = float(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError("GROUNDED_MODEL_TIMEOUT must be a positive number of seconds") from exc
+        raise ValueError(
+            "GROUNDED_MODEL_TIMEOUT must be a positive number of seconds"
+        ) from exc
     if seconds <= 0:
         raise ValueError("model timeout must be a positive number of seconds")
     return seconds
@@ -128,13 +167,16 @@ def _activate_pack(dataset: str) -> Pack:
     """Select one validated pack for this evaluation process."""
     pack = load_pack(dataset)
     if pack.semantics is None:
-        raise ValueError(f"Dataset pack {dataset!r} does not declare a semantic backend")
+        raise ValueError(
+            f"Dataset pack {dataset!r} does not declare a semantic backend"
+        )
     os.environ["GROUNDED_PACK"] = pack.name
     return pack
 
 
 def _with_active_pack(function: Callable[..., Any]) -> Callable[..., Any]:
     """Scope GROUNDED_PACK to one evaluation call without leaking it to callers."""
+
     @wraps(function)
     def wrapped(*args: Any, **kwargs: Any) -> Any:
         dataset = kwargs.get("dataset", "fixture")
@@ -180,6 +222,22 @@ def load_golden_cases(golden: str | Path) -> list[dict[str, Any]]:
     return cases
 
 
+def select_cases(
+    cases: list[dict[str, Any]], case_ids: set[str] | None = None
+) -> list[dict[str, Any]]:
+    """Select an explicit bounded subset without silently dropping a requested case."""
+    if case_ids is None:
+        return cases
+    selected = [case for case in cases if case["case_id"] in case_ids]
+    found = {case["case_id"] for case in selected}
+    missing = sorted(case_ids - found)
+    if missing:
+        raise ValueError(f"Unknown case IDs: {', '.join(missing)}")
+    if not selected:
+        raise ValueError("At least one case must be selected for collection.")
+    return selected
+
+
 def validate_categorized_golden(cases: list[dict[str, Any]]) -> dict[str, int]:
     """Validate PM-authored categorized cases against the active pack surface."""
     counts: Counter[str] = Counter()
@@ -187,23 +245,35 @@ def validate_categorized_golden(cases: list[dict[str, Any]]) -> dict[str, int]:
         case_id = case.get("case_id", "<unknown>")
         category = case.get("category")
         if category not in GOLDEN_CATEGORIES:
-            raise ValueError(f"Golden case {case_id!r} has unknown category {category!r}.")
+            raise ValueError(
+                f"Golden case {case_id!r} has unknown category {category!r}."
+            )
         expected = case.get("expected_plan")
         expect = case.get("expect")
         if not isinstance(expect, dict) or not isinstance(expected, dict):
-            raise TypeError(f"Golden case {case_id!r} must declare expected_plan and expect.")
+            raise TypeError(
+                f"Golden case {case_id!r} must declare expected_plan and expect."
+            )
         validated = validate_model_output(expected)
         if validated != expected:
-            raise ValueError(f"Golden case {case_id!r} is outside the active pack surface.")
+            raise ValueError(
+                f"Golden case {case_id!r} is outside the active pack surface."
+            )
         tool = expected["tool"]
         expected_type = expect.get("type")
         if (tool == "refuse") != (expected_type == "refuse"):
-            raise ValueError(f"Golden case {case_id!r} has inconsistent refusal expectation.")
+            raise ValueError(
+                f"Golden case {case_id!r} has inconsistent refusal expectation."
+            )
         if tool == "check_policy" and expect.get("decision") not in {"allow", "mask"}:
-            raise ValueError(f"Golden policy case {case_id!r} needs allow or mask decision.")
+            raise ValueError(
+                f"Golden policy case {case_id!r} needs allow or mask decision."
+            )
         counts[category] += 1
     if not any(case["expected_plan"]["tool"] == "refuse" for case in cases):
-        raise ValueError("Categorized golden set must include at least one refusal case.")
+        raise ValueError(
+            "Categorized golden set must include at least one refusal case."
+        )
     return dict(sorted(counts.items()))
 
 
@@ -289,8 +359,129 @@ def _model_scorecard(model: str, per_run: list[dict[str, Any]]) -> dict[str, Any
     }
 
 
+def _capture_governed_execution(
+    produced_plan: dict[str, Any],
+    case: dict[str, Any],
+    pack: Pack,
+    *,
+    db_path: str,
+    cube_url: str | None,
+) -> dict[str, Any]:
+    """Execute the model's guarded call through the same seam the agent uses."""
+    if produced_plan["tool"] == "refuse":
+        return {
+            "governed_executed": False,
+            "governed_rows": None,
+            "policy_decisions": [],
+            "evidence": None,
+            "governed_response": None,
+            "governed_execution_error": None,
+        }
+    try:
+        response = _execute_tool_call(
+            produced_plan,
+            case["role"],
+            backend=pack.semantics.backend,
+            cube_url=cube_url,
+            db_path=db_path,
+        )
+    except Exception as exc:  # noqa: BLE001 - capture any execution failure for later scoring.
+        return {
+            "governed_executed": False,
+            "governed_rows": None,
+            "policy_decisions": [],
+            "evidence": None,
+            "governed_response": None,
+            "governed_execution_error": f"{type(exc).__name__}: {exc}",
+        }
+    evidence = {
+        "metric_definition": response.get("metric_definition"),
+        "verification": response.get("verification"),
+        "verify_status": response.get("verify_status"),
+        "lineage_citation": response.get("lineage_citation"),
+        "doc_citation": response.get("doc_citation"),
+    }
+    return {
+        "governed_executed": True,
+        "governed_rows": response.get("answer_rows"),
+        "policy_decisions": response.get("policy_applied", []),
+        "evidence": evidence,
+        "governed_response": response,
+        "governed_execution_error": None,
+    }
+
+
+def _capture_ungoverned_execution(
+    case: dict[str, Any],
+    provider: LLMProvider,
+    pack: Pack,
+    *,
+    db_path: str,
+    control_prompt: str | None,
+) -> dict[str, Any]:
+    """Capture the same raw-SQL control attempt used by the current comparison."""
+    result = answer_ungoverned(
+        case["question"],
+        provider,
+        db_path,
+        dataset="fixture" if pack.semantics.backend == "fixture" else pack.name,
+        system_prompt=control_prompt,
+    )
+    return {
+        "ungoverned_sql": result.get("sql"),
+        "ungoverned_rows": result.get("rows"),
+        "ungoverned_error": result.get("error") or result.get("rejection_reason"),
+        "ungoverned": result,
+    }
+
+
+def _captured_sample(
+    sample: dict[str, Any],
+    case: dict[str, Any],
+    pack: Pack,
+    *,
+    provider: LLMProvider | None,
+    db_path: str,
+    cube_url: str | None,
+    control_prompt: str | None,
+) -> dict[str, Any]:
+    """Attach execution evidence to one planning sample without scoring it."""
+    captured = {
+        **sample,
+        "question": case["question"],
+        "role": case["role"],
+        "category": case.get("category"),
+        "expect": case["expect"],
+        **_capture_governed_execution(
+            sample["produced_plan"], case, pack, db_path=db_path, cube_url=cube_url
+        ),
+    }
+    if provider is None:
+        return {
+            **captured,
+            "ungoverned_sql": None,
+            "ungoverned_rows": None,
+            "ungoverned_error": "not collected for deterministic baseline",
+            "ungoverned": None,
+        }
+    return {
+        **captured,
+        **_capture_ungoverned_execution(
+            case, provider, pack, db_path=db_path, control_prompt=control_prompt
+        ),
+    }
+
+
 def _deterministic_run(
-    cases: list[dict[str, Any]], progress: Callable[[int], None]
+    cases: list[dict[str, Any]],
+    progress: Callable[[int], None],
+    *,
+    pack: Pack | None = None,
+    db_path: str | None = None,
+    cube_url: str | None = None,
+    capture_writer: CaptureWriter | None = None,
+    model: str = "deterministic",
+    run: int = 1,
 ) -> list[dict[str, Any]]:
     samples: list[dict[str, Any]] = []
     for case_number, case in enumerate(cases, start=1):
@@ -298,19 +489,29 @@ def _deterministic_run(
         started = time.perf_counter()
         produced_plan = plan(case["question"])
         latency_ms = round((time.perf_counter() - started) * 1000, 3)
-        samples.append(
-            {
-                "case_id": case["case_id"],
-                "expected_plan": case["expected_plan"],
-                "produced_plan": produced_plan,
-                "raw_model_output": None,
-                "parsed_plan": produced_plan,
-                "routing_correct": score_routing(produced_plan, case["expected_plan"]),
-                "schema_valid": _plan_schema_valid(produced_plan),
-                "refused": produced_plan["tool"] == "refuse",
-                "latency_ms": latency_ms,
-            }
-        )
+        sample = {
+            "case_id": case["case_id"],
+            "expected_plan": case["expected_plan"],
+            "produced_plan": produced_plan,
+            "raw_model_output": None,
+            "parsed_plan": produced_plan,
+            "routing_correct": score_routing(produced_plan, case["expected_plan"]),
+            "schema_valid": _plan_schema_valid(produced_plan),
+            "refused": produced_plan["tool"] == "refuse",
+            "latency_ms": latency_ms,
+        }
+        if capture_writer is not None and pack is not None and db_path is not None:
+            sample = _captured_sample(
+                sample,
+                case,
+                pack,
+                provider=None,
+                db_path=db_path,
+                cube_url=cube_url,
+                control_prompt=None,
+            )
+            capture_writer.write({"model": model, "run": run, **sample})
+        samples.append(sample)
     return samples
 
 
@@ -320,8 +521,23 @@ def _provider_run(
     progress: Callable[[int], None],
     planner_prompt: str | None = None,
     concurrency: int = 1,
+    *,
+    pack: Pack | None = None,
+    db_path: str | None = None,
+    cube_url: str | None = None,
+    capture_writer: CaptureWriter | None = None,
+    model: str = "",
+    run: int = 1,
 ) -> list[dict[str, Any]]:
     """Run one model over a case batch, preserving case order after parallel calls."""
+    control_prompt = (
+        pack_schema_prompt(db_path, pack.name, pack.transform_dir is not None)
+        if capture_writer is not None
+        and pack is not None
+        and db_path is not None
+        and pack.semantics.backend == "cube"
+        else None
+    )
 
     def evaluate(case_number: int, case: dict[str, Any]) -> dict[str, Any]:
         progress(case_number)
@@ -330,7 +546,7 @@ def _provider_run(
             case["question"], provider, planner_prompt
         )
         latency_ms = round((time.perf_counter() - started) * 1000, 3)
-        return {
+        sample = {
             "case_id": case["case_id"],
             "expected_plan": case["expected_plan"],
             "produced_plan": produced_plan,
@@ -341,9 +557,23 @@ def _provider_run(
             "refused": produced_plan["tool"] == "refuse",
             "latency_ms": latency_ms,
         }
+        if capture_writer is not None and pack is not None and db_path is not None:
+            sample = _captured_sample(
+                sample,
+                case,
+                pack,
+                provider=provider,
+                db_path=db_path,
+                cube_url=cube_url,
+                control_prompt=control_prompt,
+            )
+            capture_writer.write({"model": model, "run": run, **sample})
+        return sample
 
     if concurrency == 1:
-        return [evaluate(case_number, case) for case_number, case in enumerate(cases, 1)]
+        return [
+            evaluate(case_number, case) for case_number, case in enumerate(cases, 1)
+        ]
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
         futures = [
             executor.submit(evaluate, case_number, case)
@@ -410,7 +640,9 @@ def write_benchmark(
     compacted = {key: value for key, value in benchmark.items() if key != "scorecards"}
     compacted_scorecards: dict[str, Any] = {}
     for model, scorecard in benchmark["scorecards"].items():
-        compacted_scorecard = {key: value for key, value in scorecard.items() if key != "per_run"}
+        compacted_scorecard = {
+            key: value for key, value in scorecard.items() if key != "per_run"
+        }
         compacted_scorecard["per_run"] = [
             {
                 "run": run["run"],
@@ -443,8 +675,12 @@ def run_benchmark(
     wall_clock: Callable[[], datetime] | None = None,
     resource_sampler_factory: Callable[[], ResourceSampler] = process_resource_sampler,
     concurrency: int | None = None,
+    capture_path: str | Path | None = None,
+    db_path: str | None = None,
+    cube_url: str | None = None,
+    case_ids: set[str] | None = None,
 ) -> dict[str, Any]:
-    """Benchmark deterministic and local-model routing for one selected pack."""
+    """Benchmark routing, optionally retaining complete execution captures for later scoring."""
     if runs < 1:
         raise ValueError("runs must be at least 1")
     model_timeout_seconds = resolve_model_timeout_seconds(model_timeout_seconds)
@@ -454,13 +690,28 @@ def run_benchmark(
     sweep_started = monotonic_clock()
     pack = _activate_pack(dataset)
     golden_path = Path(golden) if golden is not None else pack.golden
-    cases = load_golden_cases(golden_path)
+    cases = select_cases(load_golden_cases(golden_path), case_ids)
     category_counts = (
         validate_categorized_golden(cases)
         if all("category" in case for case in cases)
         else {}
     )
     selected_models = models or model_roster()
+    db_path = db_path or str(pack.destination.path)
+    capture_writer = (
+        CaptureWriter(
+            capture_path,
+            {
+                "dataset": pack.name,
+                "golden_path": str(golden_path),
+                "models": selected_models,
+                "runs": runs,
+                "started_at": sweep_started_at.isoformat(),
+            },
+        )
+        if capture_path is not None
+        else None
+    )
     scorecards: dict[str, Any] = {}
     model_total = len(selected_models)
     case_total = len(cases)
@@ -481,6 +732,7 @@ def run_benchmark(
             )
             with timeout:
                 for run_number in range(1, runs + 1):
+
                     def progress(
                         case_number: int,
                         current_model_number: int = model_number,
@@ -494,8 +746,18 @@ def run_benchmark(
                             file=sys.stderr,
                             flush=True,
                         )
+
                     samples = (
-                        _deterministic_run(cases, progress)
+                        _deterministic_run(
+                            cases,
+                            progress,
+                            pack=pack,
+                            db_path=db_path,
+                            cube_url=cube_url,
+                            capture_writer=capture_writer,
+                            model=model,
+                            run=run_number,
+                        )
                         if model == "deterministic"
                         else _provider_run(
                             cases,
@@ -507,6 +769,12 @@ def run_benchmark(
                             progress,
                             planner_prompt,
                             concurrency,
+                            pack=pack,
+                            db_path=db_path,
+                            cube_url=cube_url,
+                            capture_writer=capture_writer,
+                            model=model,
+                            run=run_number,
                         )
                     )
                     per_run.append({"run": run_number, "samples": samples})
@@ -563,6 +831,8 @@ def run_benchmark(
         },
     }
     benchmark["dataset"] = pack.name
+    if capture_writer is not None:
+        benchmark["capture_path"] = str(capture_writer.path)
     write_benchmark(benchmark, output_path)
     print(
         f"\n[benchmark complete] models={model_total} cases={case_total} runs={runs} arm=governed",
@@ -573,15 +843,33 @@ def run_benchmark(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run Grounded's governed routing benchmark.")
+    parser = argparse.ArgumentParser(
+        description="Run Grounded's governed routing benchmark."
+    )
     parser.add_argument("--dataset", default="fixture")
     parser.add_argument("--models", help="Comma-separated local Ollama roster override")
+    parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--model-timeout", type=float)
     parser.add_argument("--concurrency", type=int)
+    parser.add_argument(
+        "--capture-path",
+        help="Write complete per-case JSONL captures here for offline scoring.",
+    )
+    parser.add_argument(
+        "--case-ids",
+        help="Comma-separated case IDs for a bounded collection run.",
+    )
+    parser.add_argument("--db-path")
+    parser.add_argument("--cube-url")
     arguments = parser.parse_args()
     run_benchmark(
         dataset=arguments.dataset,
         models=arguments.models.split(",") if arguments.models else None,
+        runs=arguments.runs,
         model_timeout_seconds=arguments.model_timeout,
         concurrency=arguments.concurrency,
+        capture_path=arguments.capture_path,
+        case_ids=set(arguments.case_ids.split(",")) if arguments.case_ids else None,
+        db_path=arguments.db_path,
+        cube_url=arguments.cube_url,
     )

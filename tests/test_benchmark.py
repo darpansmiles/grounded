@@ -8,6 +8,7 @@ import yaml
 from evals.benchmark import render_comparison, run_benchmark
 from evals.routing import score_routing
 from models.provider import ProviderUnavailable, StubProvider
+from scripts.seed_duckdb import seed_database
 
 _METRIC_PLAN = {
     "tool": "query_metric",
@@ -178,3 +179,89 @@ def test_benchmark_marks_zero_sample_provider_with_a_specific_skip_reason(tmp_pa
     assert zero["status"] == "skipped"
     assert zero["skip_reason"] == "zero_samples"
     assert "skipped (zero_samples)" in render_comparison(benchmark)
+
+
+def test_capture_path_persists_executed_governed_and_ungoverned_records(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    database = tmp_path / "grounded.duckdb"
+    seed_database(str(database))
+    golden_path = tmp_path / "golden.yml"
+    capture_path = tmp_path / "capture.jsonl"
+    metric_plan = {
+        "tool": "query_metric",
+        "args": {
+            "metric": "revenue",
+            "dimensions": ["category"],
+            "filters": {"order_month": "last_month"},
+        },
+    }
+    policy_plan = {
+        "tool": "check_policy",
+        "args": {"target": "customers.email", "role": "viewer"},
+    }
+    refusal_plan = {"tool": "refuse", "args": {}}
+    cases = [
+        {
+            "case_id": "metric",
+            "question": "Revenue by category",
+            "role": "viewer",
+            "expected_plan": metric_plan,
+            "expect": {"type": "metric"},
+        },
+        {
+            "case_id": "policy",
+            "question": "What policy protects email?",
+            "role": "viewer",
+            "expected_plan": policy_plan,
+            "expect": {"type": "policy", "decision": "mask"},
+        },
+        {
+            "case_id": "refusal",
+            "question": "Forecast revenue",
+            "role": "viewer",
+            "expected_plan": refusal_plan,
+            "expect": {"type": "refuse"},
+        },
+    ]
+    golden_path.write_text(yaml.safe_dump(cases), encoding="utf-8")
+
+    class CaptureProvider:
+        def complete(self, system: str, user: str, temperature: float = 0.0) -> str:
+            del temperature
+            if system.startswith("Answer the user's question by returning one SQL"):
+                return "SELECT 1 AS raw_value"
+            return json.dumps(
+                {
+                    "Revenue by category": metric_plan,
+                    "What policy protects email?": policy_plan,
+                    "Forecast revenue": refusal_plan,
+                }[user]
+            )
+
+    benchmark = run_benchmark(
+        ["capture-stub"],
+        runs=1,
+        golden=golden_path,
+        provider_factory=lambda _model: CaptureProvider(),
+        output_path=tmp_path / "benchmark.json",
+        capture_path=capture_path,
+        db_path=str(database),
+    )
+
+    records = [json.loads(line) for line in capture_path.read_text(encoding="utf-8").splitlines()]
+    assert records[0]["record_type"] == "manifest"
+    assert records[0]["schema_version"] == 1
+    by_case = {record["case_id"]: record for record in records[1:]}
+    metric = by_case["metric"]
+    assert metric["governed_executed"] is True
+    assert metric["governed_rows"]
+    assert metric["policy_decisions"] == []
+    assert metric["evidence"]["lineage_citation"]
+    assert metric["ungoverned_sql"] == "SELECT 1 AS raw_value"
+    assert metric["ungoverned_rows"] == [{"raw_value": 1}]
+    assert metric["ungoverned_error"] is None
+    assert by_case["policy"]["governed_executed"] is True
+    assert by_case["policy"]["policy_decisions"][0]["decision"] == "mask"
+    assert by_case["refusal"]["governed_executed"] is False
+    assert by_case["refusal"]["ungoverned"]["schema_break"] is False
+    assert benchmark["capture_path"] == str(capture_path)
