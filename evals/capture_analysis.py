@@ -120,29 +120,34 @@ def analyze_capture(
 ) -> dict[str, Any]:
     """Read one capture JSONL and return review-only diagnostics by failure bucket."""
     manifest: dict[str, Any] | None = None
-    records: list[dict[str, Any]] = []
-    for line in Path(capture_path).read_text(encoding="utf-8").splitlines():
-        item = json.loads(line)
-        if item.get("record_type") == "manifest":
-            manifest = item
-        elif item.get("record_type") == "case":
-            records.append(item)
+    samples: list[dict[str, Any]] = []
+    with Path(capture_path).open(encoding="utf-8") as capture_file:
+        for line in capture_file:
+            if not line.strip():
+                continue
+            item = json.loads(line)
+            if item.get("record_type") == "manifest":
+                manifest = item
+            elif item.get("record_type") == "case":
+                if not isinstance(manifest, dict) or not isinstance(
+                    manifest.get("dataset"), str
+                ):
+                    raise TypeError("Capture manifest must precede case records.")
+                dataset = manifest["dataset"]
+                bucket = classify_ungoverned_record(item, dataset=dataset, db_path=db_path)
+                samples.append(
+                    {
+                        "case_id": item.get("case_id"),
+                        "model": item.get("model"),
+                        "run": item.get("run"),
+                        "bucket": bucket,
+                        "failure_reason": _ungoverned(item).get("failure_reason"),
+                        "error": _error(item) or None,
+                    }
+                )
     if not isinstance(manifest, dict) or not isinstance(manifest.get("dataset"), str):
         raise TypeError("Capture analysis requires one manifest with a dataset.")
     dataset = manifest["dataset"]
-    samples = []
-    for record in records:
-        bucket = classify_ungoverned_record(record, dataset=dataset, db_path=db_path)
-        samples.append(
-            {
-                "case_id": record.get("case_id"),
-                "model": record.get("model"),
-                "run": record.get("run"),
-                "bucket": bucket,
-                "failure_reason": _ungoverned(record).get("failure_reason"),
-                "error": _error(record) or None,
-            }
-        )
     counts = Counter(sample["bucket"] for sample in samples)
     return {
         "dataset": dataset,

@@ -9,8 +9,10 @@ observable rather than self-confirming.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import Counter, defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -148,6 +150,52 @@ def _row_key(row: dict[str, Any], *, alias_map: dict[str, str] | None = None) ->
     return tuple(sorted((aliases.get(key, key), _canonical(value)) for key, value in row.items()))
 
 
+def _fingerprint_value(value: Any) -> Any:
+    """Represent values with their type so capture hashes are stable and exact."""
+    if value is None:
+        return {"type": "null"}
+    if isinstance(value, bool):
+        return {"type": "bool", "value": value}
+    if isinstance(value, (Decimal, int, float)):
+        return {"type": "number", "value": str(Decimal(str(value)).normalize())}
+    if isinstance(value, datetime):
+        return {"type": "datetime", "value": value.isoformat()}
+    if isinstance(value, date):
+        return {"type": "date", "value": value.isoformat()}
+    if isinstance(value, str):
+        return {"type": "string", "value": value}
+    if isinstance(value, dict):
+        return {str(key): _fingerprint_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_fingerprint_value(item) for item in value]
+    return {"type": type(value).__name__, "value": str(value)}
+
+
+def rows_content_hash(
+    rows: list[dict[str, Any]], *, alias_map: dict[str, str] | None = None
+) -> str:
+    """Return a stable multiset fingerprint for a complete result set.
+
+    Capture writes this compact fingerprint alongside a bounded row preview.
+    Offline scoring computes the same fingerprint from independent truth, which
+    preserves exact multiset comparison without retaining all model rows.
+    """
+    aliases = alias_map or {}
+    normalized_rows = [
+        json.dumps(
+            {
+                aliases.get(str(key), str(key)): _fingerprint_value(value)
+                for key, value in row.items()
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        for row in rows
+    ]
+    payload = "\n".join(sorted(normalized_rows)).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def rows_match(
     actual: list[dict[str, Any]] | None,
     expected: list[dict[str, Any]] | None,
@@ -169,6 +217,28 @@ def rows_match(
     return Counter(_row_key(row, alias_map=alias_map) for row in actual) == Counter(
         _row_key(row, alias_map=alias_map) for row in expected
     )
+
+
+def captured_rows_match(
+    actual: list[dict[str, Any]] | None,
+    expected: list[dict[str, Any]] | None,
+    *,
+    row_count: Any = None,
+    content_hash: Any = None,
+    alias_map: dict[str, str] | None = None,
+    metric: str | None = None,
+) -> bool:
+    """Compare legacy full rows or compact capture records against truth."""
+    if expected is None:
+        return False
+    if content_hash is not None or row_count is not None:
+        return (
+            isinstance(row_count, int)
+            and isinstance(content_hash, str)
+            and row_count == len(expected)
+            and content_hash == rows_content_hash(expected, alias_map=alias_map)
+        )
+    return rows_match(actual, expected, alias_map=alias_map, metric=metric)
 
 
 _METRIC_TOLERANCES: dict[str, Decimal] = {
@@ -492,7 +562,18 @@ def score_record(
     governed_rows = record.get("governed_rows")
     governed_correctness = "n/a"
     if expected_metric and governed_answered and expected_rows is not None:
-        governed_correctness = "correct" if rows_match(governed_rows, expected_rows, alias_map=aliases, metric=metric) else "wrong"
+        governed_correctness = (
+            "correct"
+            if captured_rows_match(
+                governed_rows,
+                expected_rows,
+                row_count=record.get("governed_row_count"),
+                content_hash=record.get("governed_rows_hash"),
+                alias_map=aliases,
+                metric=metric,
+            )
+            else "wrong"
+        )
     elif expected_refusal and governed_plan.get("tool") != "refuse":
         governed_correctness = "wrong"
     governed_policy = _policy_matches(record, governed_rows)
@@ -509,7 +590,18 @@ def score_record(
     raw_answered = not raw_refusal and bool(raw_sql)
     raw_correctness = "n/a"
     if expected_metric and raw_rows is not None and expected_rows is not None:
-        raw_correctness = "correct" if rows_match(raw_rows, expected_rows, alias_map=aliases, metric=metric) else "wrong"
+        raw_correctness = (
+            "correct"
+            if captured_rows_match(
+                raw_rows,
+                expected_rows,
+                row_count=raw.get("row_count", record.get("ungoverned_row_count")),
+                content_hash=raw.get("rows_hash", record.get("ungoverned_rows_hash")),
+                alias_map=aliases,
+                metric=metric,
+            )
+            else "wrong"
+        )
     elif expected_refusal and raw_answered:
         raw_correctness = "wrong"
     raw_policy = _policy_matches(record, raw_rows)
@@ -573,20 +665,42 @@ def _arm_summary(samples: list[dict[str, Any]], arm: str) -> dict[str, Any]:
     }
 
 
-def _capture_records(paths: list[str | Path]) -> tuple[str, list[dict[str, Any]]]:
-    manifests: list[dict[str, Any]] = []
-    records: list[dict[str, Any]] = []
+def _iter_capture_records(
+    paths: list[str | Path],
+) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Yield case records one JSONL line at a time without loading a capture."""
+    declared_dataset: str | None = None
     for path in paths:
-        for line in Path(path).read_text(encoding="utf-8").splitlines():
-            item = json.loads(line)
-            if item.get("record_type") == "manifest":
-                manifests.append(item)
-            elif item.get("record_type") == "case":
-                records.append(item)
-    datasets = {manifest.get("dataset") for manifest in manifests}
-    if len(datasets) != 1 or None in datasets:
+        with Path(path).open(encoding="utf-8") as capture_file:
+            for line in capture_file:
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                if item.get("record_type") == "manifest":
+                    dataset = item.get("dataset")
+                    if not isinstance(dataset, str):
+                        raise ValueError("Offline scoring requires a capture manifest dataset.")
+                    if declared_dataset is not None and declared_dataset != dataset:
+                        raise ValueError(
+                            "Offline scoring requires capture files for exactly one declared dataset."
+                        )
+                    declared_dataset = dataset
+                elif item.get("record_type") == "case":
+                    if declared_dataset is None:
+                        raise ValueError("Capture manifest must precede case records.")
+                    yield declared_dataset, item
+    if declared_dataset is None:
         raise ValueError("Offline scoring requires capture files for exactly one declared dataset.")
-    return datasets.pop(), records
+
+
+def _compact_scored_sample(sample: dict[str, Any]) -> dict[str, Any]:
+    """Keep review output bounded even when an independent query has many rows."""
+    expected_rows = sample.pop("expected_rows", None)
+    if expected_rows is not None:
+        sample["expected_row_count"] = len(expected_rows)
+        sample["expected_rows_hash"] = rows_content_hash(expected_rows)
+        sample["expected_rows_preview"] = expected_rows[:50]
+    return sample
 
 
 def evaluator_self_test() -> dict[str, bool]:
@@ -643,11 +757,16 @@ def score_capture_files(
     gate = evaluator_self_test()
     if not all(gate.values()):
         raise RuntimeError(f"Evaluator self-test failed: {gate}")
-    dataset, records = _capture_records(paths)
-    samples = [score_record(record, dataset=dataset, db_path=db_path) for record in records]
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for sample in samples:
+    dataset: str | None = None
+    for record_dataset, record in _iter_capture_records(paths):
+        dataset = record_dataset
+        sample = _compact_scored_sample(
+            score_record(record, dataset=record_dataset, db_path=db_path)
+        )
         grouped[str(sample.get("model"))].append(sample)
+    if dataset is None:
+        raise ValueError("Offline scoring requires at least one captured case record.")
     return {
         "dataset": dataset,
         "source": "captured_jsonl",

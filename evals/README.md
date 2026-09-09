@@ -62,7 +62,9 @@ scoring. Slice 012b adds the ungoverned control arm.
 ## Ungoverned control arm and model card
 
 `python -m evals.benchmark --capture-path <file>` collects the same local
-models through both arms and writes complete JSONL execution records. The raw
+models through both arms and writes bounded JSONL execution records. Each
+result retains a 50-row preview, full row count, and stable content hash rather
+than an unbounded duplicate response payload. The raw
 model receives only the schema and proposes one SQL `SELECT`; the executor opens
 DuckDB read-only and rejects multi-statement or non-`SELECT` output before
 execution. Collection records the model's actual governed plan and result, plus

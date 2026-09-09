@@ -10,8 +10,10 @@ from evals import offline_scoring
 from evals.offline_scoring import (
     _METRIC_TOLERANCES,
     _aliases_for_metric,
+    captured_rows_match,
     evaluator_self_test,
     independent_rows,
+    rows_content_hash,
     rows_match,
     score_capture_files,
     score_record,
@@ -110,6 +112,46 @@ def test_rows_match_distinguishes_null_zero_and_empty_result():
     assert not rows_match([{"revenue": 0}], [{"revenue": ""}], metric="revenue")
 
 
+def test_compact_capture_hash_preserves_full_multiset_comparison():
+    expected = [{"revenue": 1}, {"revenue": 2}, {"revenue": 2}]
+    preview = expected[:1]
+    assert captured_rows_match(
+        preview,
+        expected,
+        row_count=3,
+        content_hash=rows_content_hash(expected, alias_map=_aliases_for_metric("revenue")),
+        alias_map=_aliases_for_metric("revenue"),
+        metric="revenue",
+    )
+    assert not captured_rows_match(
+        preview,
+        expected,
+        row_count=2,
+        content_hash=rows_content_hash(expected, alias_map=_aliases_for_metric("revenue")),
+        alias_map=_aliases_for_metric("revenue"),
+        metric="revenue",
+    )
+
+
+def test_offline_score_uses_compact_capture_metadata_for_both_arms(tmp_path):
+    database = tmp_path / "fixture.duckdb"
+    seed_database(str(database))
+    record = _metric_record()
+    rows = [{"revenue": 1185.0}]
+    row_hash = rows_content_hash(rows, alias_map=_aliases_for_metric("revenue"))
+    record["governed_rows"] = rows[:1]
+    record["governed_row_count"] = len(rows)
+    record["governed_rows_hash"] = row_hash
+    record["ungoverned"]["rows"] = [{"total_revenue": 1185.0}]
+    record["ungoverned"]["row_count"] = len(rows)
+    record["ungoverned"]["rows_hash"] = row_hash
+
+    sample = score_record(record, dataset="fixture", db_path=database)
+
+    assert sample["governed"]["answer_correctness"] == "correct"
+    assert sample["ungoverned"]["answer_correctness"] == "correct"
+
+
 def test_metric_tolerances_are_declared_per_metric_and_not_a_global_cushion():
     assert {"revenue", "orders", "aov"} <= set(_METRIC_TOLERANCES)
     assert _METRIC_TOLERANCES["revenue"] == 0
@@ -146,6 +188,32 @@ def test_offline_score_uses_symmetric_fenced_sql_extraction(tmp_path):
     assert sample["ungoverned"]["interface_compliance"] == "compliant"
     rate = report["models"]["stub"]["groups"]["in_catalog"]["governed"]["answer_correctness_when_answered"]
     assert rate == {"numerator": 1, "denominator": 1, "rate": 1.0}
+
+
+def test_offline_score_streams_jsonl_without_calling_path_read_text(tmp_path, monkeypatch):
+    database = tmp_path / "fixture.duckdb"
+    seed_database(str(database))
+    capture = tmp_path / "capture.jsonl"
+    capture.write_text(
+        "\n".join(
+            [
+                json.dumps({"record_type": "manifest", "dataset": "fixture"}),
+                json.dumps(_metric_record()),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "evals.offline_scoring.Path.read_text",
+        lambda *_args, **_kwargs: pytest.fail("capture scoring must stream files"),
+    )
+
+    report = score_capture_files([capture], db_path=database)
+
+    assert report["dataset"] == "fixture"
+    assert report["models"]["stub"]["samples"][0]["expected_row_count"] == 1
+    assert "expected_rows" not in report["models"]["stub"]["samples"][0]
 
 
 def test_offline_score_marks_a_valid_but_wrong_call_wrong_and_missing_evidence_incomplete(

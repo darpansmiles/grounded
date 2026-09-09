@@ -26,6 +26,7 @@ import yaml
 from agent.agent import _execute_tool_call, plan
 from agent.llm_planner import parse_model_output, system_prompt, validate_model_output
 from agent.ungoverned import answer_ungoverned, pack_schema_prompt
+from evals.offline_scoring import _aliases_for_metric, rows_content_hash
 from evals.resources import ResourceSampler, process_resource_sampler
 from evals.roster import model_roster
 from evals.routing import score_routing
@@ -39,6 +40,7 @@ from semantics.loader import load_expanded_definition
 
 DEFAULT_MODEL_TIMEOUT_SECONDS = 30 * 60
 DEFAULT_REQUEST_CONCURRENCY = 2
+CAPTURE_ROW_PREVIEW_LIMIT = 50
 _GOVERNED_TOOLS = {
     "list_metrics",
     "describe_metric",
@@ -71,20 +73,20 @@ class ModelTimeout(RuntimeError):
 
 
 class CaptureWriter:
-    """Append complete model-inference records so scoring can run offline later."""
+    """Append bounded model-inference records so scoring can run offline later."""
 
     def __init__(self, path: str | Path, metadata: dict[str, Any]) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = Lock()
         self.path.write_text(
-            _json_line({"record_type": "manifest", "schema_version": 1, **metadata}),
+            _json_line({"record_type": "manifest", "schema_version": 2, **metadata}),
             encoding="utf-8",
         )
 
     def write(self, record: dict[str, Any]) -> None:
         with self._lock, self.path.open("a", encoding="utf-8") as capture_file:
-            capture_file.write(_json_line({"record_type": "case", **record}))
+            capture_file.write(_json_line({"record_type": "case", **_compact_capture_record(record)}))
 
 
 def _json_safe(value: Any) -> Any:
@@ -102,6 +104,55 @@ def _json_safe(value: Any) -> Any:
 
 def _json_line(record: dict[str, Any]) -> str:
     return json.dumps(_json_safe(record), sort_keys=True) + "\n"
+
+
+def _capture_metric_aliases(record: dict[str, Any]) -> dict[str, str]:
+    plan = record.get("expected_plan")
+    metric = plan.get("args", {}).get("metric") if isinstance(plan, dict) else None
+    return _aliases_for_metric(metric) if isinstance(metric, str) else {}
+
+
+def _compact_rows(
+    rows: Any, *, aliases: dict[str, str]
+) -> tuple[list[dict[str, Any]] | None, int | None, str | None]:
+    """Retain a bounded preview and a full-result fingerprint for offline scoring."""
+    if not isinstance(rows, list):
+        return None, None, None
+    return (
+        rows[:CAPTURE_ROW_PREVIEW_LIMIT],
+        len(rows),
+        rows_content_hash(rows, alias_map=aliases),
+    )
+
+
+def _compact_capture_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Remove duplicate full results while preserving exact comparison metadata."""
+    compact = dict(record)
+    aliases = _capture_metric_aliases(record)
+
+    governed_rows, governed_count, governed_hash = _compact_rows(
+        compact.get("governed_rows"), aliases=aliases
+    )
+    compact["governed_rows"] = governed_rows
+    compact["governed_row_count"] = governed_count
+    compact["governed_rows_hash"] = governed_hash
+    compact.pop("governed_response", None)
+
+    raw = compact.get("ungoverned")
+    raw = dict(raw) if isinstance(raw, dict) else None
+    raw_rows_source = raw.get("rows") if raw is not None else compact.get("ungoverned_rows")
+    ungoverned_rows, ungoverned_count, ungoverned_hash = _compact_rows(
+        raw_rows_source, aliases=aliases
+    )
+    compact["ungoverned_rows"] = ungoverned_rows
+    compact["ungoverned_row_count"] = ungoverned_count
+    compact["ungoverned_rows_hash"] = ungoverned_hash
+    if raw is not None:
+        raw["rows"] = ungoverned_rows
+        raw["row_count"] = ungoverned_count
+        raw["rows_hash"] = ungoverned_hash
+        compact["ungoverned"] = raw
+    return compact
 
 
 def resolve_model_timeout_seconds(explicit: float | None = None) -> float:
@@ -374,7 +425,6 @@ def _capture_governed_execution(
             "governed_rows": None,
             "policy_decisions": [],
             "evidence": None,
-            "governed_response": None,
             "governed_execution_error": None,
         }
     try:
@@ -391,7 +441,6 @@ def _capture_governed_execution(
             "governed_rows": None,
             "policy_decisions": [],
             "evidence": None,
-            "governed_response": None,
             "governed_execution_error": f"{type(exc).__name__}: {exc}",
         }
     evidence = {
@@ -406,7 +455,6 @@ def _capture_governed_execution(
         "governed_rows": response.get("answer_rows"),
         "policy_decisions": response.get("policy_applied", []),
         "evidence": evidence,
-        "governed_response": response,
         "governed_execution_error": None,
     }
 

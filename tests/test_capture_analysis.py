@@ -58,7 +58,7 @@ def test_capture_analysis_detects_a_documented_alias_comparison_artifact(tmp_pat
     )
 
 
-def test_capture_analysis_reads_jsonl_and_reports_review_only_buckets(tmp_path):
+def test_capture_analysis_streams_jsonl_and_reports_review_only_buckets(tmp_path, monkeypatch):
     capture = tmp_path / "capture.jsonl"
     fenced = _record(
         raw_sql="```sql\nSELECT 1185 AS revenue\n```",
@@ -74,6 +74,12 @@ def test_capture_analysis_reads_jsonl_and_reports_review_only_buckets(tmp_path):
         )
         + "\n",
         encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "evals.capture_analysis.Path.read_text",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("capture analysis must stream files")
+        ),
     )
 
     report = analyze_capture(capture)

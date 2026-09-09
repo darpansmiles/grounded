@@ -5,7 +5,13 @@ import time
 
 import yaml
 
-from evals.benchmark import render_comparison, run_benchmark
+from evals.benchmark import (
+    CAPTURE_ROW_PREVIEW_LIMIT,
+    CaptureWriter,
+    render_comparison,
+    run_benchmark,
+)
+from evals.offline_scoring import rows_content_hash
 from evals.routing import score_routing
 from models.provider import ProviderUnavailable, StubProvider
 from scripts.seed_duckdb import seed_database
@@ -250,18 +256,51 @@ def test_capture_path_persists_executed_governed_and_ungoverned_records(tmp_path
 
     records = [json.loads(line) for line in capture_path.read_text(encoding="utf-8").splitlines()]
     assert records[0]["record_type"] == "manifest"
-    assert records[0]["schema_version"] == 1
+    assert records[0]["schema_version"] == 2
     by_case = {record["case_id"]: record for record in records[1:]}
     metric = by_case["metric"]
     assert metric["governed_executed"] is True
     assert metric["governed_rows"]
+    assert metric["governed_row_count"] == len(metric["governed_rows"])
+    assert isinstance(metric["governed_rows_hash"], str)
+    assert "governed_response" not in metric
     assert metric["policy_decisions"] == []
     assert metric["evidence"]["lineage_citation"]
     assert metric["ungoverned_sql"] == "SELECT 1 AS raw_value"
     assert metric["ungoverned_rows"] == [{"raw_value": 1}]
+    assert metric["ungoverned_row_count"] == 1
+    assert isinstance(metric["ungoverned_rows_hash"], str)
     assert metric["ungoverned_error"] is None
     assert by_case["policy"]["governed_executed"] is True
     assert by_case["policy"]["policy_decisions"][0]["decision"] == "mask"
     assert by_case["refusal"]["governed_executed"] is False
     assert by_case["refusal"]["ungoverned"]["schema_break"] is False
     assert benchmark["capture_path"] == str(capture_path)
+
+
+def test_capture_writer_bounds_large_rows_but_retains_count_and_full_content_hash(tmp_path):
+    capture_path = tmp_path / "capture.jsonl"
+    rows = [{"category": f"category-{index}", "revenue": index} for index in range(137)]
+    record = {
+        "case_id": "large-result",
+        "expected_plan": _METRIC_PLAN,
+        "governed_rows": rows,
+        "governed_response": {"answer_rows": rows, "large_duplicate": rows},
+        "ungoverned_rows": rows,
+        "ungoverned": {"raw_sql": "SELECT 1", "rows": rows, "schema_break": False},
+    }
+    writer = CaptureWriter(capture_path, {"dataset": "fixture"})
+    writer.write(record)
+
+    persisted = [json.loads(line) for line in capture_path.open(encoding="utf-8")][1]
+    expected_hash = rows_content_hash(rows, alias_map={})
+    assert persisted["governed_rows"] == rows[:CAPTURE_ROW_PREVIEW_LIMIT]
+    assert persisted["governed_row_count"] == len(rows)
+    assert persisted["governed_rows_hash"] == expected_hash
+    assert "governed_response" not in persisted
+    assert persisted["ungoverned_rows"] == rows[:CAPTURE_ROW_PREVIEW_LIMIT]
+    assert persisted["ungoverned_row_count"] == len(rows)
+    assert persisted["ungoverned_rows_hash"] == expected_hash
+    assert persisted["ungoverned"]["rows"] == rows[:CAPTURE_ROW_PREVIEW_LIMIT]
+    assert persisted["ungoverned"]["row_count"] == len(rows)
+    assert persisted["ungoverned"]["rows_hash"] == expected_hash
