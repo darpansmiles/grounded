@@ -45,11 +45,13 @@ Getting to "generic" meant paying down every place the engine had quietly assume
 
 ### 6. Governed-result contracts that show judgment
 
-A few small decisions carry disproportionate weight because they are where a naive system fabricates or crashes. An aggregate over a group with no facts returns **zero for an additive measure** (a sum of no revenue is zero) but **null for a ratio** (an average over no rows is undefined, not zero). The platform never invents a number and never crashes on an empty bucket. Lineage is **real and per-table**, not collapsed into a single aggregate source node, because table-level lineage is what a citation is actually for. Same-named tables across packs get **pack-scoped namespaces** so two datasets never merge into one wrong node.
+A few small decisions carry disproportionate weight because they are where a naive system fabricates or crashes. An aggregate over a group with no facts returns **zero for an additive measure** (a sum of no revenue is zero) but **null for a ratio** (an average over no rows is undefined, not zero). The governed path does not fabricate via free-form SQL, and it returns zero for an empty additive group and null for an undefined ratio rather than inventing a value. A wrong declared call is still a wrong answer, and the rebuilt evaluation measures how often that happens. Lineage is **real and per-table**, not collapsed into a single aggregate source node, because table-level lineage is what a citation is actually for. Same-named tables across packs get **pack-scoped namespaces** so two datasets never merge into one wrong node.
 
 ### 7. The evaluation harness: the non-delegable part
 
-The evals are their own build: traces → a golden set → a failure taxonomy (correct, correct-refusal, hallucination, over-refusal, schema-break) → distributions rather than averages. The headline is `hallucination_rate`; routing coverage is reported separately so the two are never conflated. The runner bounds each model with a wall-clock timeout and records a slow model as `incomplete` rather than fabricating its numbers or hanging the run. This is the part that caught our own regressions. A brittle routing prompt showed up as over-refusal in the distributions and drove the fix.
+The evals are their own build: traces → a golden set → a failure taxonomy → distributions rather than averages. The evals report a failure taxonomy and routing coverage as distributions; the governed answer-level rate is one dimension among four (answer correctness, interface compliance, policy compliance, evidence completeness), each with its denominator. The runner bounds each model with a wall-clock timeout and records a slow model as `incomplete` rather than inventing a result for an unfinished run. This is the part that caught our own regressions. A brittle routing prompt showed up as over-refusal in the distributions and drove the fix.
+
+[RERUN: four-dimension system-comparison summary with denominators]
 
 ## Why this is the interesting layer
 

@@ -61,24 +61,29 @@ scoring. Slice 012b adds the ungoverned control arm.
 
 ## Ungoverned control arm and model card
 
-`python -m evals.compare` runs the same local models without the governed
-harness. The raw model receives only the fixture schema and proposes one SQL
-`SELECT`; the executor opens DuckDB read-only and rejects multi-statement or
-non-`SELECT` output before execution. Metric-case ground truth is computed by
-the governed resolver using Golden-v2's expected plan and role. Refusal cases
-have no valid answer, so any raw answer is a hallucination.
+`python -m evals.benchmark --capture-path <file>` collects the same local
+models through both arms and writes complete JSONL execution records. The raw
+model receives only the schema and proposes one SQL `SELECT`; the executor opens
+DuckDB read-only and rejects multi-statement or non-`SELECT` output before
+execution. Collection records the model's actual governed plan and result, plus
+the raw SQL attempt, so scoring can be repeated without running a model again.
 
-The command writes `evals/model_card.json` and prints governed/ungoverned
-columns for the `correct_answer`, `correct_refusal`, `hallucination`,
-`over_refusal`, and `schema_break` outcome rates. The headline is
-`hallucination_rate`: governed calls cannot fabricate a number, while
-ungoverned raw SQL can. Governed `routing_accuracy` and conditional
-`answer_correctness_when_answered` remain visible so safety is not mistaken for
-coverage. The deterministic keyword planner is a 012a routing floor only; this
-same-model raw-SQL comparison runs the three local tiers. Describe, impact, and
-policy cases are intentionally excluded because they are governed meta-tools,
-not raw SQL questions. This control arm is the comparison for the governed
-benchmark; it does not make raw SQL available to the production agent.
+`python -m evals.compare --capture-path <file>` scores an existing capture
+offline. Its independent expected answer uses direct DuckDB SQL rather than the
+resolver being evaluated. It reports answer correctness, interface compliance,
+policy compliance, and evidence completeness separately, with denominators and
+`null` for inapplicable conditional rates. No capture is a valid result card
+until the evaluator self-test catches wrong metric, wrong period, duplicate
+result, missing evidence, and forbidden scope.
+
+The model can invoke only declared metric calls, so it cannot author free-form
+SQL and cannot schema-break. It can still select the wrong declared call and
+return a real, governed number for the wrong question. The rebuilt evaluation
+measures that answer-level failure; it is not a guarantee. This is a system
+comparison, catalog plus governed tools versus schema plus SQL, and does not
+isolate the mechanism.
+
+[RERUN: four-dimension comparison table with denominators]
 
 ## Faithfulness judge
 
@@ -87,8 +92,8 @@ number in each governed or ungoverned answer is supported by the same governed
 ground truth. Supply `judge_provider` to `evals.compare.run_comparison` to add
 `faithfulness_rate` to the model card; omitting it leaves all existing
 correctness, routing, refusal, and safety scores unchanged. This judge is most
-useful for identifying ungoverned fabricated answers; governed results remain
-faithful by construction.
+useful for interpretive prose and does not replace deterministic row, policy,
+and evidence checks.
 
 Before publishing a judge score, the PM should hand-label a small representative
 sample and report the judge's agreement with that sample. That spot check is a

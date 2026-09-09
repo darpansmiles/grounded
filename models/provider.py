@@ -3,10 +3,36 @@
 from __future__ import annotations
 
 import json
+import math
+import os
+import time
 from dataclasses import dataclass, field
 from typing import Protocol
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+# A single request can be slow while Ollama cold-loads a large model into memory,
+# especially on a memory-constrained machine. The default is generous; override with
+# GROUNDED_OLLAMA_HTTP_TIMEOUT (seconds). This is per-request; the per-model wall clock
+# lives in the benchmark runner (GROUNDED_MODEL_TIMEOUT).
+DEFAULT_HTTP_TIMEOUT_SECONDS = 600.0
+_HTTP_ATTEMPTS = 2
+
+
+def _default_http_timeout() -> float:
+    raw = os.environ.get("GROUNDED_OLLAMA_HTTP_TIMEOUT")
+    if raw is None:
+        return DEFAULT_HTTP_TIMEOUT_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_HTTP_TIMEOUT_SECONDS
+    return value if math.isfinite(value) and value > 0 else DEFAULT_HTTP_TIMEOUT_SECONDS
+
+
+def _looks_like_timeout(exc: Exception) -> bool:
+    """A cold-load timeout is transient and worth one retry; a refused host is not."""
+    return isinstance(exc, TimeoutError) or "timed out" in str(exc).lower()
 
 
 class ProviderUnavailable(RuntimeError):
@@ -42,6 +68,8 @@ class OllamaProvider:
     model: str = "llama3.2"
     host: str = "http://localhost:11434"
     temperature: float = 0.0
+    timeout: float = field(default_factory=_default_http_timeout)
+    retry_backoff_seconds: float = 2.0
 
     def complete(self, system: str, user: str, temperature: float = 0.0) -> str:
         """Request one response or explain how to make the local service available."""
@@ -60,14 +88,22 @@ class OllamaProvider:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        try:
-            with urlopen(request, timeout=30) as response:
-                body = json.loads(response.read().decode("utf-8"))
-        except (HTTPError, URLError, OSError, TimeoutError) as exc:
-            raise ProviderUnavailable(
-                f"Ollama is unavailable at {self.host}: {exc}. "
-                f"Start it with `ollama serve` and pull `{self.model}`."
-            ) from exc
+        body = None
+        for attempt in range(1, _HTTP_ATTEMPTS + 1):
+            try:
+                with urlopen(request, timeout=self.timeout) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+                break
+            except (HTTPError, URLError, OSError, TimeoutError) as exc:
+                if attempt < _HTTP_ATTEMPTS and _looks_like_timeout(exc):
+                    time.sleep(self.retry_backoff_seconds)
+                    continue
+                raise ProviderUnavailable(
+                    f"Ollama is unavailable at {self.host} "
+                    f"(per-request timeout {self.timeout:.0f}s, {attempt} attempt(s)): {exc}. "
+                    f"Ensure `ollama serve` is running and `{self.model}` is pulled; "
+                    f"raise GROUNDED_OLLAMA_HTTP_TIMEOUT if a large model is slow to load."
+                ) from exc
 
         text = body.get("response")
         if not isinstance(text, str):

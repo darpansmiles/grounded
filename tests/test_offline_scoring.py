@@ -4,8 +4,12 @@ import ast
 import inspect
 import json
 
+import pytest
+
 from evals import offline_scoring
 from evals.offline_scoring import (
+    _METRIC_TOLERANCES,
+    _aliases_for_metric,
     evaluator_self_test,
     independent_rows,
     rows_match,
@@ -81,6 +85,40 @@ def test_rows_match_preserves_duplicates_and_ignores_row_order():
     assert not rows_match([{"revenue": 1}, {"revenue": 1}], expected)
 
 
+def test_rows_match_only_accepts_declared_metric_aliases():
+    expected = [{"revenue": 1185}]
+
+    assert rows_match(
+        [{"total_revenue": 1185}],
+        expected,
+        alias_map=_aliases_for_metric("revenue"),
+        metric="revenue",
+    )
+    assert not rows_match(
+        [{"made_up_revenue": 1185}],
+        expected,
+        alias_map=_aliases_for_metric("revenue"),
+        metric="revenue",
+    )
+
+
+def test_rows_match_distinguishes_null_zero_and_empty_result():
+    assert rows_match([], [], metric="revenue")
+    assert not rows_match(None, [])
+    assert not rows_match([], [{"revenue": None}], metric="revenue")
+    assert not rows_match([{"revenue": None}], [{"revenue": 0}], metric="revenue")
+    assert not rows_match([{"revenue": 0}], [{"revenue": ""}], metric="revenue")
+
+
+def test_metric_tolerances_are_declared_per_metric_and_not_a_global_cushion():
+    assert {"revenue", "orders", "aov"} <= set(_METRIC_TOLERANCES)
+    assert _METRIC_TOLERANCES["revenue"] == 0
+    assert _METRIC_TOLERANCES["orders"] == 0
+    assert _METRIC_TOLERANCES["aov"] == 0
+    assert rows_match([{"revenue": 1.00}], [{"revenue": 1}], metric="revenue")
+    assert not rows_match([{"revenue": 1.01}], [{"revenue": 1}], metric="revenue")
+
+
 def test_offline_score_uses_symmetric_fenced_sql_extraction(tmp_path):
     database = tmp_path / "fixture.duckdb"
     seed_database(str(database))
@@ -134,6 +172,30 @@ def test_evaluator_self_test_catches_every_required_seeded_failure():
         "missing_evidence": True,
         "forbidden_scope": True,
     }
+
+
+def test_offline_scoring_refuses_to_produce_a_report_if_the_self_test_fails(
+    tmp_path, monkeypatch
+):
+    capture = tmp_path / "capture.jsonl"
+    capture.write_text(
+        json.dumps({"record_type": "manifest", "dataset": "fixture"}) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        offline_scoring,
+        "evaluator_self_test",
+        lambda: {
+            "wrong_metric": True,
+            "wrong_period": True,
+            "duplicate_result": False,
+            "missing_evidence": True,
+            "forbidden_scope": True,
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="Evaluator self-test failed"):
+        score_capture_files([capture])
 
 
 def test_offline_card_is_not_valid_when_independent_truth_is_unavailable(tmp_path):

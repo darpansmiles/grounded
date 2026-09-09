@@ -1,24 +1,56 @@
 # Evaluation taxonomy and rates
 
-Each comparison sample has one mutually exclusive outcome. The governed and ungoverned arms share the same golden question and governed truth.
+The benchmark asks: **For declared analytical tasks, what does a governed
+interface change about answer correctness, useful coverage, policy enforcement,
+and inspectability, and what does it cost?** It is a system comparison,
+catalog plus governed tools versus schema plus SQL. It does not isolate the
+mechanism.
+
+The evals report a failure taxonomy and routing coverage as distributions; the
+governed answer-level rate is one dimension among four, each with its
+denominator.
+
+## Four scored dimensions
+
+| Dimension | Question | Denominator |
+| --- | --- | --- |
+| `answer_correctness` | Did the executed rows match an independent expected answer? | Answered, in-catalog cases with independent truth. |
+| `interface_compliance` | Was the produced declared call or raw SQL output well formed for its arm? | Applicable attempted outputs. |
+| `policy_compliance` | Did the result respect applicable scope and masking requirements? | Cases with an applicable policy obligation. |
+| `evidence_completeness` | Is the required definition, policy record, verification, and lineage evidence present and matched to execution? | Governed metric answers requiring evidence. |
+
+`hallucination_rate` in the free-form-SQL sense does not apply to the governed
+arm, which cannot author SQL. The governed arm's answer-level failure is a
+valid-but-wrong selection (`wrong_answer`), and that rate is measured, not
+assumed.
+
+## Summary labels
 
 | Label | Meaning |
 | --- | --- |
-| `correct_answer` | An answerable request produced rows equal to governed truth. |
-| `correct_refusal` | A request expected to be refused was refused. |
-| `hallucination` | A non-schema-breaking answer is not equal to governed truth, or an answer was supplied where refusal was required. |
-| `over_refusal` | An answerable request was safely refused or failed routing. |
-| `schema_break` | Raw SQL was rejected or could not run against the declared schema. |
+| `correct_answer` | An executed in-catalog answer matched independent truth. |
+| `wrong_answer` | An executed answer differed from independent truth, including a response to a required refusal. |
+| `correct_refusal` | A request that should be refused was refused. |
+| `over_refusal` | An answerable request was refused. |
+| `schema_break` | A raw SQL output was rejected or could not execute. Governed `schema_break` is not applicable because it cannot author SQL. |
 
 ## Reported rates
 
+Every rate carries a numerator and denominator. A conditional rate is `null`
+when its denominator is zero rather than being presented as a perfect score.
+
 | Rate | Definition |
 | --- | --- |
-| `hallucination_rate` | Fraction of all samples labeled `hallucination`. For the governed arm it is structurally zero because only validated metric execution can produce an answer. |
-| `routing_accuracy` | Fraction of planner proposals that exactly match the golden governed plan. It applies to the governed arm. |
-| `faithfulness_rate` | Fraction of answers a strict local judge marks supported by the governed context. The judge result is reported with agreement against hand labels. |
-| `over_refusal_rate` | Fraction of answerable requests that were refused or failed to route. It measures lost coverage, not a wrong numeric answer. |
-| `schema_break_rate` | Fraction of raw-SQL samples rejected by the parser or database. It is separate from hallucination because no answer executed. |
-| `answer_correctness_when_answered` | Correct-answer fraction conditional on an answer reaching execution. For governed execution, any validated answer comes from the governed metric backend. |
+| `answer_correctness_when_answered` | Correct answers divided by correct plus wrong answers. |
+| `wrong_answer_rate` | Wrong answers divided by the relevant scored cases. |
+| `over_refusal_rate` | Over-refusals divided by answerable cases. |
+| `correct_refusal_rate` | Correct refusals divided by required-refusal cases. |
+| `routing_accuracy` | Exact declared-plan match among answerable governed proposals. |
+| `schema_break_rate` | Raw SQL schema breaks divided by applicable raw attempts. |
 
-Rates must be read together. A model can have low hallucination only because it schema-breaks or refuses almost everything; a 0% safety rate alone is not a coverage claim. The benchmark adds bootstrap confidence intervals, exact paired McNemar tests, and per-run routing variance to the rate table.
+[RERUN: four-dimension result table with denominators]
+
+A model can have a low raw answer-error rate only because it schema-breaks or
+refuses almost everything. A valid governed call can still select the wrong
+metric, period, dimension, or scope. These distinctions are why the four
+dimensions must be read together.

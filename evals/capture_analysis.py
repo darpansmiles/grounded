@@ -1,0 +1,177 @@
+"""Classify raw-SQL control failures from an existing capture JSONL file.
+
+This is deliberately post-collection analysis.  It does not call a model, the
+governed service, Cube, or the resolver.  Where a local DuckDB path is supplied,
+it uses the independent scorer only to distinguish a column-alias comparison
+artifact from a genuinely different row set.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from collections import Counter
+from pathlib import Path
+from typing import Any
+
+from evals.offline_scoring import (
+    TruthUnavailable,
+    _aliases_for_metric,
+    independent_rows,
+    rows_match,
+)
+
+_SCHEMA_FAILURE_MARKERS = (
+    "binder error",
+    "catalog error",
+    "referenced column",
+    "column",
+    "table",
+    "does not exist",
+    "no such",
+    "join",
+)
+
+
+def _ungoverned(record: dict[str, Any]) -> dict[str, Any]:
+    value = record.get("ungoverned")
+    return value if isinstance(value, dict) else {}
+
+
+def _raw_sql(record: dict[str, Any]) -> str:
+    raw = _ungoverned(record)
+    candidate = raw.get("raw_sql") or record.get("ungoverned_sql") or raw.get("sql") or ""
+    return candidate if isinstance(candidate, str) else ""
+
+
+def _error(record: dict[str, Any]) -> str:
+    raw = _ungoverned(record)
+    candidate = (
+        raw.get("error")
+        or raw.get("rejection_reason")
+        or record.get("ungoverned_error")
+        or ""
+    )
+    return candidate if isinstance(candidate, str) else ""
+
+
+def _rows(record: dict[str, Any]) -> list[dict[str, Any]] | None:
+    raw = _ungoverned(record)
+    candidate = raw.get("rows") if raw else record.get("ungoverned_rows")
+    return candidate if isinstance(candidate, list) else None
+
+
+def _is_fenced_rejection(record: dict[str, Any]) -> bool:
+    return (
+        _raw_sql(record).strip().startswith("```")
+        and "only one select statement" in _error(record).casefold()
+    )
+
+
+def _is_schema_hallucination(record: dict[str, Any]) -> bool:
+    raw = _ungoverned(record)
+    reason = raw.get("failure_reason")
+    if reason in {"wrong_column", "wrong_table", "wrong_join"}:
+        return True
+    error = _error(record).casefold()
+    return bool(error) and any(marker in error for marker in _SCHEMA_FAILURE_MARKERS)
+
+
+def _is_alias_mismatch(
+    record: dict[str, Any], dataset: str, db_path: str | Path | None
+) -> bool:
+    """Find equivalent values whose only disagreement is a documented alias."""
+    if record.get("expect", {}).get("type") != "metric":
+        return False
+    actual = _rows(record)
+    plan = record.get("expected_plan")
+    if not isinstance(plan, dict) or actual is None:
+        return False
+    metric = plan.get("args", {}).get("metric")
+    if not isinstance(metric, str):
+        return False
+    try:
+        expected = independent_rows(dataset, plan, str(record.get("role", "")), db_path=db_path)
+    except TruthUnavailable:
+        return False
+    return not rows_match(actual, expected, metric=metric) and rows_match(
+        actual,
+        expected,
+        alias_map=_aliases_for_metric(metric),
+        metric=metric,
+    )
+
+
+def classify_ungoverned_record(
+    record: dict[str, Any], *, dataset: str, db_path: str | Path | None = None
+) -> str:
+    """Return one mutually exclusive diagnosis for an executed capture record."""
+    if _is_fenced_rejection(record):
+        return "fenced_rejection"
+    if _is_schema_hallucination(record):
+        return "schema_hallucination"
+    if _is_alias_mismatch(record, dataset, db_path):
+        return "alias_mismatch"
+    return "other_failure" if _error(record) else "not_a_failure"
+
+
+def analyze_capture(
+    capture_path: str | Path, *, db_path: str | Path | None = None
+) -> dict[str, Any]:
+    """Read one capture JSONL and return review-only diagnostics by failure bucket."""
+    manifest: dict[str, Any] | None = None
+    records: list[dict[str, Any]] = []
+    for line in Path(capture_path).read_text(encoding="utf-8").splitlines():
+        item = json.loads(line)
+        if item.get("record_type") == "manifest":
+            manifest = item
+        elif item.get("record_type") == "case":
+            records.append(item)
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("dataset"), str):
+        raise TypeError("Capture analysis requires one manifest with a dataset.")
+    dataset = manifest["dataset"]
+    samples = []
+    for record in records:
+        bucket = classify_ungoverned_record(record, dataset=dataset, db_path=db_path)
+        samples.append(
+            {
+                "case_id": record.get("case_id"),
+                "model": record.get("model"),
+                "run": record.get("run"),
+                "bucket": bucket,
+                "failure_reason": _ungoverned(record).get("failure_reason"),
+                "error": _error(record) or None,
+            }
+        )
+    counts = Counter(sample["bucket"] for sample in samples)
+    return {
+        "dataset": dataset,
+        "source": "captured_jsonl",
+        "classification": "post_collection_diagnostic_not_a_benchmark_score",
+        "counts": dict(sorted(counts.items())),
+        "samples": samples,
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Classify raw-SQL failures in an existing benchmark capture."
+    )
+    parser.add_argument("--capture-path", required=True, help="Existing capture JSONL to inspect.")
+    parser.add_argument(
+        "--db-path",
+        help="Optional local DuckDB file for alias-mismatch checks; read-only and no services required.",
+    )
+    arguments = parser.parse_args()
+    print(
+        json.dumps(
+            analyze_capture(arguments.capture_path, db_path=arguments.db_path),
+            indent=2,
+            sort_keys=True,
+            default=str,
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()
