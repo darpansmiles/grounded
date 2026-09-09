@@ -42,6 +42,8 @@ Question: Filter a date range before aggregating.
 SQL: SELECT SUM(amount) AS total FROM schema_name.table_name WHERE event_date >= DATE '2026-01-01'
 """
 
+_SQL_FENCE = re.compile(r"^```(?:sql)?\s*\n?(.*?)\n?```$", re.IGNORECASE | re.DOTALL)
+
 
 def pack_schema_prompt(db_path: str, pack_name: str, has_transform: bool = True) -> str:
     """Describe the active pack's queryable gold or bronze schema for the control arm."""
@@ -96,9 +98,23 @@ def _prompt_for_dataset(dataset: str) -> str:
     raise ValueError("dataset must be either 'fixture' or 'aw'.")
 
 
-def _single_select(sql: str) -> bool:
+def extract_sql(candidate: str) -> str:
+    """Apply the shared output leniency used when comparing captured arms.
+
+    Models frequently wrap an otherwise valid query in a Markdown SQL fence.
+    The control arm accepts exactly that harmless wrapper, then still applies
+    the one-statement read-only check below.  Capture scoring uses this same
+    extraction rule for historical records, so formatting alone cannot create
+    an arm-specific failure.
+    """
+    stripped = candidate.strip()
+    match = _SQL_FENCE.fullmatch(stripped)
+    return match.group(1).strip() if match else stripped
+
+
+def is_single_select(sql: str) -> bool:
     """Allow one SELECT/WITH query only; refuse empty, multi-statement, and write SQL."""
-    stripped = sql.strip()
+    stripped = extract_sql(sql)
     if not stripped:
         return False
     if ";" in stripped:
@@ -107,6 +123,11 @@ def _single_select(sql: str) -> bool:
         stripped = stripped[:-1].strip()
     statement = stripped.lstrip()
     return bool(re.match(r"(?is)^(select|with)\b", statement))
+
+
+def _single_select(sql: str) -> bool:
+    """Backward-compatible private alias for the raw control guard."""
+    return is_single_select(sql)
 
 
 def _failure_reason(error: str | None) -> str | None:
@@ -140,8 +161,8 @@ def answer_ungoverned(
     raw_sql = ""
     for attempts in range(1, max_attempts + 1):
         raw_sql = provider.complete(prompt, question)
-        sql = raw_sql.strip()
-        if not _single_select(sql):
+        sql = extract_sql(raw_sql)
+        if not is_single_select(sql):
             error = "only one SELECT statement is allowed"
         else:
             try:

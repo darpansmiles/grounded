@@ -83,6 +83,25 @@ project `grounded-<dataset>` and are torn down in a `finally` block before the
 queue advances. This frees container memory without removing the pack's local
 volumes; the separately managed Marquez service remains outside that lifecycle.
 
+## Capture and offline-scoring boundary
+
+`python -m evals.benchmark --capture-path <file>` is the collection path. It
+persists a JSONL manifest followed by one complete record for each produced
+plan: the guarded plan and its role, the governed execution rows and policy
+decisions, definition/verification/lineage evidence, and the raw-SQL control's
+SQL, rows, or execution error. It does not score those records.
+
+`python -m evals.compare --capture-path <file>` is the separate offline path.
+It makes no model, Cube, governed-service, or resolver call. Instead,
+`evals.offline_scoring` calculates the expected metric rows with independent
+direct DuckDB SQL over the active pack file, then compares both arms as row
+multisets with declared per-metric exact tolerances and documented semantic
+aliases. It reports answer correctness, interface compliance, policy
+compliance, and evidence completeness separately. A built-in evaluator gate
+must catch wrong-metric, wrong-period, duplicate-result, missing-evidence, and
+forbidden-scope fixtures before an offline report is marked valid. The legacy
+live comparison remains historical and must not be used for a corrected card.
+
 ## Dataset-pack boundary
 
 `packlib` loads the active dataset pack from `GROUNDED_PACK` (defaulting to

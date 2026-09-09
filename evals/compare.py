@@ -30,6 +30,7 @@ from evals.judge import (
     judge_agreement,
     load_judge_labels,
 )
+from evals.offline_scoring import score_capture_files, write_offline_score
 from evals.roster import model_roster
 from evals.stats import bootstrap_rate_ci, mcnemar_exact, run_variance
 from governed.service import governed_query
@@ -905,7 +906,45 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         help="Concurrent requests to one loaded model; overrides OLLAMA_NUM_PARALLEL.",
     )
+    parser.add_argument(
+        "--capture-path",
+        action="append",
+        help=(
+            "Score an existing capture JSONL offline. Repeat only for captures from "
+            "the same dataset; does not call models or the governed resolver."
+        ),
+    )
+    parser.add_argument(
+        "--truth-db-path",
+        help="Optional DuckDB path for independent offline truth computation.",
+    )
+    parser.add_argument(
+        "--offline-output",
+        help="Where to persist the offline score report (not a publishable result card).",
+    )
     arguments = parser.parse_args(argv)
+    if arguments.capture_path:
+        try:
+            report = score_capture_files(
+                arguments.capture_path, db_path=arguments.truth_db_path
+            )
+            if arguments.offline_output:
+                write_offline_score(report, arguments.offline_output)
+            print(
+                json.dumps(
+                    {
+                        "dataset": report["dataset"],
+                        "evaluator_self_test": report["evaluator_self_test"],
+                        "models": sorted(report["models"]),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+        except (OSError, ValueError, RuntimeError, duckdb.Error) as exc:
+            print(f"Offline scoring failed: {exc}", file=sys.stderr)
+            return 1
+        return 0
     models = arguments.models.split(",") if arguments.models else None
     failure: Exception | None = None
     try:

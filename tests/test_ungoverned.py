@@ -97,6 +97,19 @@ def test_ungoverned_select_can_match_governed_truth(seeded_database):
     assert ungoverned_correct(result, ground_truth_for_case(_metric_case(), str(seeded_database)))
 
 
+def test_ungoverned_accepts_the_same_sql_fence_leniency_as_capture_scoring(
+    seeded_database,
+):
+    result = answer_ungoverned(
+        _metric_case()["question"],
+        StubProvider({_metric_case()["question"]: f"```sql\n{_CORRECT_SQL}\n```"}),
+        str(seeded_database),
+    )
+
+    assert result["schema_break"] is False
+    assert result["sql"].lstrip().startswith("SELECT")
+
+
 def test_wrong_number_sql_is_incorrect_and_a_hallucination_in_the_card(seeded_database, tmp_path):
     golden_path = tmp_path / "golden.yml"
     golden_path.write_text(yaml.safe_dump([_metric_case(), _refuse_case()]), encoding="utf-8")
