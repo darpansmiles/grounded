@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Self
 from urllib.error import URLError
 
@@ -7,6 +8,7 @@ import pytest
 
 from models.provider import (
     DEFAULT_HTTP_TIMEOUT_SECONDS,
+    DEFAULT_NUM_PREDICT,
     OllamaProvider,
     ProviderUnavailable,
 )
@@ -36,6 +38,40 @@ def test_ollama_http_timeout_uses_env_or_safe_default(monkeypatch):
     for invalid in ("bad", "0", "-4", "inf"):
         monkeypatch.setenv("GROUNDED_OLLAMA_HTTP_TIMEOUT", invalid)
         assert OllamaProvider().timeout == DEFAULT_HTTP_TIMEOUT_SECONDS
+
+
+def test_ollama_num_predict_uses_env_or_safe_default(monkeypatch):
+    monkeypatch.delenv("GROUNDED_OLLAMA_NUM_PREDICT", raising=False)
+    assert OllamaProvider().num_predict == DEFAULT_NUM_PREDICT
+
+    monkeypatch.setenv("GROUNDED_OLLAMA_NUM_PREDICT", "768")
+    assert OllamaProvider().num_predict == 768
+
+    for invalid in ("bad", "0", "-4", "2.5"):
+        monkeypatch.setenv("GROUNDED_OLLAMA_NUM_PREDICT", invalid)
+        assert OllamaProvider().num_predict == DEFAULT_NUM_PREDICT
+
+
+def test_ollama_request_payload_includes_generation_cap(monkeypatch):
+    payloads: list[dict] = []
+
+    def available(request, *, timeout: float):
+        del timeout
+        payloads.append(json.loads(request.data.decode("utf-8")))
+        return _Response()
+
+    monkeypatch.setattr("models.provider.urlopen", available)
+
+    assert OllamaProvider(num_predict=321).complete("system", "question") == "done"
+    assert payloads == [
+        {
+            "model": "llama3.2",
+            "system": "system",
+            "prompt": "question",
+            "stream": False,
+            "options": {"temperature": 0.0, "num_predict": 321},
+        }
+    ]
 
 
 def test_ollama_retries_exactly_once_after_timeout(monkeypatch):

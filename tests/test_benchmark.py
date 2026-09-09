@@ -102,8 +102,11 @@ def test_benchmark_scores_stub_models_and_persists_per_model_distributions(tmp_p
     ]
     assert "samples" not in persisted["scorecards"]["stub-A"]["per_run"][0]
     assert "raw_model_output" not in output_path.read_text(encoding="utf-8")
-    assert "deterministic" in render_comparison(benchmark)
-    assert "stub-A" in render_comparison(benchmark)
+    rendered = render_comparison(benchmark)
+    assert "Routing signal only — not answer quality" in rendered
+    assert "evals.compare --capture-path" in rendered
+    assert "deterministic" in rendered
+    assert "stub-A" in rendered
 
 
 def test_benchmark_records_unavailable_models_as_skipped(tmp_path):

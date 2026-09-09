@@ -649,6 +649,11 @@ def render_comparison(benchmark: dict[str, Any]) -> str:
         ("latency_ms.p95", lambda card: card["scorecard"]["latency_ms"]["p95"]),
     ]
     lines = [
+        (
+            "Routing signal only — not answer quality. Answer-level scoring is the "
+            "separate offline report (`evals.compare --capture-path`)."
+        ),
+        "",
         "| metric | " + " | ".join(models) + " |",
         "| --- | " + " | ".join("---" for _ in models) + " |",
     ]

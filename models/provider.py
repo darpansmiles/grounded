@@ -16,6 +16,7 @@ from urllib.request import Request, urlopen
 # GROUNDED_OLLAMA_HTTP_TIMEOUT (seconds). This is per-request; the per-model wall clock
 # lives in the benchmark runner (GROUNDED_MODEL_TIMEOUT).
 DEFAULT_HTTP_TIMEOUT_SECONDS = 600.0
+DEFAULT_NUM_PREDICT = 1024
 _HTTP_ATTEMPTS = 2
 
 
@@ -28,6 +29,17 @@ def _default_http_timeout() -> float:
     except ValueError:
         return DEFAULT_HTTP_TIMEOUT_SECONDS
     return value if math.isfinite(value) and value > 0 else DEFAULT_HTTP_TIMEOUT_SECONDS
+
+
+def _default_num_predict() -> int:
+    raw = os.environ.get("GROUNDED_OLLAMA_NUM_PREDICT")
+    if raw is None:
+        return DEFAULT_NUM_PREDICT
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_NUM_PREDICT
+    return value if value > 0 else DEFAULT_NUM_PREDICT
 
 
 def _looks_like_timeout(exc: Exception) -> bool:
@@ -69,6 +81,7 @@ class OllamaProvider:
     host: str = "http://localhost:11434"
     temperature: float = 0.0
     timeout: float = field(default_factory=_default_http_timeout)
+    num_predict: int = field(default_factory=_default_num_predict)
     retry_backoff_seconds: float = 2.0
 
     def complete(self, system: str, user: str, temperature: float = 0.0) -> str:
@@ -79,7 +92,10 @@ class OllamaProvider:
                 "system": system,
                 "prompt": user,
                 "stream": False,
-                "options": {"temperature": self.temperature if temperature == 0.0 else temperature},
+                "options": {
+                    "temperature": self.temperature if temperature == 0.0 else temperature,
+                    "num_predict": self.num_predict,
+                },
             }
         ).encode("utf-8")
         request = Request(
