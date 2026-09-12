@@ -53,6 +53,7 @@ Because the model routes a declared call instead of authoring SQL, it cannot fab
 
 ## Read the design
 
+- [Whitepaper](docs/whitepaper.md): the thesis and the measured evidence.
 - [Integration](docs/integration.md): the runtime seams and pack lifecycle.
 - [Foundations](docs/foundations.md): what is bought and what Grounded builds.
 - [AI strategy](docs/ai-strategy.md): the governance-versus-identity boundary.
