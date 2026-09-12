@@ -2,9 +2,9 @@
 
 ![Python](https://img.shields.io/badge/python-3.11%E2%80%933.13-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-![Governed hallucination: 0%](https://img.shields.io/badge/governed%20hallucination-0%25-brightgreen)
+![Status: reference build](https://img.shields.io/badge/status-reference%20build-blue)
 
-Grounded is a reference build for governed data agents: instead of asking a model to write unrestricted SQL, it validates one declared MCP tool call, executes a governed metric, applies policy, verifies the result, records an audit event, and returns a lineage citation. That makes a fabricated numeric answer structurally unavailable at the execution boundary; model quality still matters for routing and coverage.
+Grounded is a reference build for governed data agents: instead of asking a model to write unrestricted SQL, it validates one declared MCP tool call, executes a governed metric, applies policy, verifies the result, records an audit event, and returns a lineage citation. Because the agent can invoke only declared metric calls, it cannot author free-form SQL at the boundary. Selecting the wrong declared call remains possible, so routing and coverage still depend on model quality and are measured, not assumed.
 
 ![The guided payoff: a governed answer returns a verified number with a receipt while raw SQL breaks on the same question.](docs/assets/quickstart-payoff.png)
 
@@ -45,9 +45,11 @@ To run the guided quickstart (`make start`) or individual pipeline targets, your
 | Free disk | ≥ 5 GiB | Docker images and local analytical storage. |
 | Local ports | 5433, 4000, 3000 | PostgreSQL source, Cube, and Marquez UI. The CLI detects collisions and offers alternate ports. |
 
-## Headline results
+## What is measured
 
-Across five dataset packs and up to nine local models, every completed governed comparison recorded **0% hallucination**. The paired comparisons report bootstrap confidence intervals and exact McNemar tests; routing accuracy and over-refusal remain visible rather than being hidden by the safety result. AdventureWorks has six completed models in the comparison; the remaining packs have eight or nine. See [benchmarks.md](docs/benchmarks.md) for methodology, tables, caveats, and broken-SQL examples.
+The benchmark asks five dataset packs (AdventureWorks, TPC-H, Spider world_1, BIRD california_schools, and a deterministic fixture) the same governed questions across up to nine local models, three runs each, and scores four things independently: whether the executed answer matches an independently computed expected answer, whether the output is well formed, whether policy scope holds, and whether the promised evidence (definition, verification, lineage) is present. Expected answers come from an independent query path, not the governed resolver under test, and an evaluator self-test that seeds a wrong metric, wrong period, duplicate result, missing evidence, and forbidden scope must pass before any score is recorded.
+
+Because the model routes a declared call instead of authoring SQL, it cannot fabricate a free-form query at the boundary; it can still select the wrong declared call, so that error is measured rather than assumed. For the capable models (gemma2:9b, phi4, qwen2.5:14b, qwen2.5:7b), governed correct-when-answered was 90 to 100% across the warehouse-shaped and text-to-SQL packs, with wrong-answer rates in the low single digits, while the raw-SQL control arm was near-zero correct on every pack. Run variance was effectively zero at temperature zero. Full methodology, tables with denominators, and the one disclosed comparison caveat (19 AdventureWorks cases) are in [benchmarks.md](docs/benchmarks.md).
 
 ## Read the design
 

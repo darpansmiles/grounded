@@ -1,8 +1,8 @@
 # The glue: what we built on top of commodity open source
 
-Grounded is deliberately **commodity open-source tools plus a governing layer we built**. The tools are bought; the layer that makes them safe for an AI agent is the product. This document is the honest account of that layer, the "glue," because the glue is where the engineering judgment is and it is the part a reader cannot get from a list of dependencies.
+Grounded is deliberately **standard open-source tools plus a governing layer we built**. The governing layer that makes those tools safe for an AI agent is the product. This document is the account of that layer, the "glue," because that is where the engineering judgment is and it is the part a reader cannot get from a list of dependencies.
 
-## The stack we bought
+## The standard stack
 
 Four standard tools do the undifferentiated heavy lifting, each swapped in without touching the layer above it:
 
@@ -49,10 +49,16 @@ A few small decisions carry disproportionate weight because they are where a nai
 
 ### 7. The evaluation harness: the non-delegable part
 
-The evals are their own build: traces → a golden set → a failure taxonomy → distributions rather than averages. The evals report a failure taxonomy and routing coverage as distributions; the governed answer-level rate is one dimension among four (answer correctness, interface compliance, policy compliance, evidence completeness), each with its denominator. The runner bounds each model with a wall-clock timeout and records a slow model as `incomplete` rather than inventing a result for an unfinished run. This is the part that caught our own regressions. A brittle routing prompt showed up as over-refusal in the distributions and drove the fix.
+The evals are their own build: traces → a golden set → a failure taxonomy → distributions rather than averages. The evals report a failure taxonomy and routing coverage as distributions; the governed answer-level rate is one dimension among four (answer correctness, interface compliance, policy compliance, evidence completeness), each with its denominator. The runner bounds each model with a wall-clock timeout and records a slow model as `incomplete` rather than inventing a result for an unfinished run.
 
-[RERUN: four-dimension system-comparison summary with denominators]
+Across three runs of five packs, strong models reached 90.5%–100.0%
+correct-when-answered on several pack/model cells, while weaker models had
+visible wrong-answer and over-refusal behavior. The raw-SQL control ranged from
+0.0% to 15.4% correct-when-answered across the five packs. This is a system
+comparison, catalog plus governed tools versus schema plus SQL, rather than a
+mechanism-isolation result. The full four-dimension tables and denominators are
+in [benchmarks.md](benchmarks.md).
 
 ## Why this is the interesting layer
 
-The commodity tools are excellent and we lean on them fully. But the thing that makes an AI agent safe over a data platform is none of them individually. It is the governing layer that unifies lineage into one auditable stream, resolves governed metrics under policy, states its own boundary, and generalizes to any dataset without code changes. That layer is what we built, and knowing which layer to build versus buy is the whole point.
+The commodity tools are excellent and we lean on them fully. But the thing that makes an AI agent safe over a data platform is none of them individually. It is the governing layer that unifies lineage into one auditable stream, resolves governed metrics under policy, states its own boundary, and generalizes to any dataset without code changes. That layer is what we built, and knowing which layer to build is the point.

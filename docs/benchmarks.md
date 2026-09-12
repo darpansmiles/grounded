@@ -1,55 +1,101 @@
 # Benchmarks
 
-The benchmark asks the same golden-set questions of two arms. The governed arm must emit a valid, pack-driven MCP plan; a validated plan is executed through the governed metric surface and every other plan becomes a refusal. The control arm receives the active DuckDB schema, a clear instruction to return one SQL `SELECT`, generic SQL examples, and one bounded retry after an execution error. It is a steelmanned raw-SQL comparison, not a weak prompt.
+Grounded's runs=3 evaluation is a system comparison: a catalog plus governed
+tools versus a schema plus raw SQL. It does not isolate the causal contribution
+of any one component.
 
-## Method
+For every non-refusal governed proposal, the evaluator executes the model's
+produced declared call under the case role and compares its rows with
+independently computed direct-SQL truth. The raw-SQL arm receives the same
+question and schema, proposes one SQL SELECT, and is scored symmetrically.
+Every score report passed an evaluator self-test that seeds a wrong metric,
+wrong period, duplicate result, missing evidence, and forbidden scope.
 
-- **Datasets:** AdventureWorks, TPC-H, Spider `world_1`, BIRD `california_schools`, and the deterministic fixture.
-- **Models:** `llama3.2:3b`, `qwen2.5:3b`, `qwen2.5:7b`, `qwen2.5:14b`, `llama3.1:8b`, `gemma2:9b`, `mistral:7b`, `phi3.5`, and `phi4` when the local machine completed the run.
-- **Runs:** three per golden case. Golden truth is computed from the governed backend, not supplied to the planner.
-- **Reporting:** mutually exclusive failure labels; bootstrap confidence intervals; exact paired McNemar tests; local LLM-judge faithfulness with agreement against hand labels; and a four-variant planner prompt ablation.
+Correct is conditional on an answered, in-catalog case. Wrong is a
+valid-but-wrong answer over all in-catalog cases. The detailed result cards
+also report interface compliance, policy compliance, and evidence completeness
+with their applicable denominators.
 
-The detailed taxonomy is defined in [metrics.md](metrics.md). The judge is an additional measurement, not an oracle.
+All figures aggregate three runs at temperature 0. Run variance was
+approximately zero. The fixture is a tiny deterministic pack with small
+denominators; it validates the test surface and does not carry the product
+argument.
 
-## Recorded result ranges
+## AdventureWorks
 
-Each completed governed cell has a 0.0% hallucination rate. The ranges below are the corresponding ungoverned rates from the result cards; they are ranges across completed models, not averages.
+| Model | Governed correct / answered | Governed wrong / all | Raw SQL correct / answered | Raw SQL wrong / all |
+| --- | --- | --- | --- | --- |
+| gemma2:9b | 90.5% (171/189) | 8.5% (18/213) | 5.6% (12/213) | 94.4% (201/213) |
+| llama3.1:8b | 87.3% (186/213) | 12.7% (27/213) | 0.0% (0/210) | 98.6% (210/213) |
+| llama3.2:3b | 62.9% (117/186) | 32.4% (69/213) | 0.0% (0/129) | 60.6% (129/213) |
+| mistral:7b | 58.6% (123/210) | 40.8% (87/213) | 0.0% (0/102) | 47.9% (102/213) |
+| phi3.5 | 57.4% (105/183) | 36.6% (78/213) | 0.0% (0/141) | 66.2% (141/213) |
+| phi4 | 94.3% (198/210) | 5.6% (12/213) | 9.9% (21/213) | 90.1% (192/213) |
+| qwen2.5:14b | 91.5% (195/213) | 8.5% (18/213) | 7.0% (15/213) | 93.0% (198/213) |
+| qwen2.5:3b | 0.0% (0/33) | 15.5% (33/213) | 0.0% (0/114) | 53.5% (114/213) |
+| qwen2.5:7b | 78.9% (168/213) | 21.1% (45/213) | 4.5% (9/201) | 90.1% (192/213) |
 
-| Dataset | Completed models | Governed hallucination | Ungoverned hallucination range |
-| --- | ---: | ---: | ---: |
-| AdventureWorks | 6 / 9 | 0.0% | 52.2%–97.8% |
-| TPC-H | 9 / 9 | 0.0% | 0.0%–100.0% |
-| Spider `world_1` | 9 / 9 | 0.0% | 0.0%–97.7% |
-| BIRD `california_schools` | 8 / 9 | 0.0% | 33.3%–72.2% |
-| Fixture | 8 / 9 | 0.0% | 0.0%–75.0% |
+## TPC-H
 
-On the full TPC-H card, the governed rates are 0.0% for all nine models while the ungoverned arm ranges from 50.6% to 100.0% when the all-schema-break phi4 outcome is read separately. Exact McNemar tests have zero discordance in the governed-wrong direction for the completed paired cases; for example the TPC-H `qwen2.5:14b` comparison reports b=249, c=0, p=2.21086e-75.
+| Model | Governed correct / answered | Governed wrong / all | Raw SQL correct / answered | Raw SQL wrong / all |
+| --- | --- | --- | --- | --- |
+| gemma2:9b | 98.3% (171/174) | 1.3% (3/228) | 0.0% (0/210) | 92.1% (210/228) |
+| llama3.1:8b | 92.1% (210/228) | 7.9% (18/228) | 0.0% (0/210) | 92.1% (210/228) |
+| llama3.2:3b | 58.3% (105/180) | 32.9% (75/228) | 0.0% (0/105) | 46.1% (105/228) |
+| mistral:7b | 50.0% (108/216) | 47.4% (108/228) | 0.0% (0/213) | 93.4% (213/228) |
+| phi3.5 | 78.1% (150/192) | 18.4% (42/228) | 0.0% (0/114) | 50.0% (114/228) |
+| phi4 | 98.6% (213/216) | 1.3% (3/228) | 0.0% (0/228) | 100.0% (228/228) |
+| qwen2.5:14b | 98.7% (225/228) | 1.3% (3/228) | 0.0% (0/228) | 100.0% (228/228) |
+| qwen2.5:3b | 10.5% (12/114) | 44.7% (102/228) | 0.0% (0/120) | 52.6% (120/228) |
+| qwen2.5:7b | 93.4% (213/228) | 6.6% (15/228) | 0.0% (0/192) | 84.2% (192/228) |
 
-The committed Markdown cards in `evals/results/` are the citable public evidence for these results. New local result cards are ignored, so a fresh benchmark run does not clutter the published record.
+## Spider world_1
 
-## What the control arm actually broke
+| Model | Governed correct / answered | Governed wrong / all | Raw SQL correct / answered | Raw SQL wrong / all |
+| --- | --- | --- | --- | --- |
+| gemma2:9b | 100.0% (93/93) | 0.0% (0/93) | 3.2% (3/93) | 96.8% (90/93) |
+| llama3.1:8b | 96.8% (90/93) | 3.2% (3/93) | 9.7% (9/93) | 90.3% (84/93) |
+| llama3.2:3b | 79.3% (69/87) | 19.4% (18/93) | 0.0% (0/84) | 90.3% (84/93) |
+| mistral:7b | 93.5% (87/93) | 6.5% (6/93) | 5.0% (3/60) | 61.3% (57/93) |
+| phi3.5 | 93.3% (84/90) | 6.5% (6/93) | 0.0% (0/57) | 61.3% (57/93) |
+| phi4 | 100.0% (93/93) | 0.0% (0/93) | 6.5% (6/93) | 93.5% (87/93) |
+| qwen2.5:14b | 100.0% (93/93) | 0.0% (0/93) | 3.2% (3/93) | 96.8% (90/93) |
+| qwen2.5:3b | 93.5% (87/93) | 6.5% (6/93) | 7.7% (6/78) | 77.4% (72/93) |
+| qwen2.5:7b | 96.8% (90/93) | 3.2% (3/93) | 13.3% (12/90) | 83.9% (78/93) |
 
-The raw-SQL arm most often produced non-executable output, including **408** TPC-H and **198** Spider occurrences of `only one SELECT statement is allowed`. It also invented relations and columns, including the recorded TPC-H errors `Referenced column "part_type" not found in FROM clause` (27) and `Referenced column "part_brand" not found in FROM clause` (24).
+## BIRD california_schools
 
-One representative rejected TPC-H output was:
+| Model | Governed correct / answered | Governed wrong / all | Raw SQL correct / answered | Raw SQL wrong / all |
+| --- | --- | --- | --- | --- |
+| gemma2:9b | 100.0% (69/69) | 0.0% (0/69) | 0.0% (0/36) | 52.2% (36/69) |
+| llama3.1:8b | 78.3% (54/69) | 21.7% (15/69) | 9.1% (3/33) | 43.5% (30/69) |
+| llama3.2:3b | 60.0% (27/45) | 26.1% (18/69) | 0.0% (0/33) | 47.8% (33/69) |
+| mistral:7b | 82.6% (57/69) | 17.4% (12/69) | 7.1% (3/42) | 56.5% (39/69) |
+| phi3.5 | 60.9% (42/69) | 39.1% (27/69) | 0.0% (0/33) | 47.8% (33/69) |
+| phi4 | 95.2% (60/63) | 4.3% (3/69) | 0.0% (0/42) | 60.9% (42/69) |
+| qwen2.5:14b | 100.0% (69/69) | 0.0% (0/69) | 10.0% (6/60) | 78.3% (54/69) |
+| qwen2.5:3b | 60.9% (42/69) | 39.1% (27/69) | 14.3% (3/21) | 26.1% (18/69) |
+| qwen2.5:7b | 100.0% (69/69) | 0.0% (0/69) | 15.4% (6/39) | 47.8% (33/69) |
 
-```sql
-SELECT SUM(li.revenue - li.cost) AS margin FROM gold.fct_lineitem li GROUP BY 1;
-```
+## Fixture
 
-The relation does not expose `revenue` or `cost`; the executed schema uses different fields. This is a schema-break, not a plausible numeric result.
+| Model | Governed correct / answered | Governed wrong / all | Raw SQL correct / answered | Raw SQL wrong / all |
+| --- | --- | --- | --- | --- |
+| gemma2:9b | 0.0% (0/3) | 10.0% (3/30) | 0.0% (0/15) | 50.0% (15/30) |
+| llama3.1:8b | 90.0% (27/30) | 10.0% (3/30) | 0.0% (0/15) | 50.0% (15/30) |
+| llama3.2:3b | 70.0% (21/30) | 30.0% (9/30) | 0.0% (0/24) | 80.0% (24/30) |
+| mistral:7b | 70.0% (21/30) | 30.0% (9/30) | 0.0% (0/12) | 40.0% (12/30) |
+| phi3.5 | 50.0% (3/6) | 10.0% (3/30) | n/a | 0.0% (0/30) |
+| phi4 | 90.0% (27/30) | 10.0% (3/30) | 0.0% (0/27) | 90.0% (27/30) |
+| qwen2.5:14b | 90.0% (27/30) | 10.0% (3/30) | 0.0% (0/24) | 80.0% (24/30) |
+| qwen2.5:3b | 100.0% (9/9) | 0.0% (0/30) | n/a | 0.0% (0/30) |
+| qwen2.5:7b | 66.7% (6/9) | 10.0% (3/30) | 0.0% (0/3) | 10.0% (3/30) |
 
-## How to read the zeroes
+## Limits
 
-Phi4's 0.0% ungoverned hallucination on TPC-H and Spider is not a safety win: its schema-break rate on those cards is 100.0%, so it never reached an answer that could be counted as a fabricated value. Always read hallucination next to schema-break and coverage.
-
-Likewise, governed 0.0% is a safety property of the validated execution path, not a claim that every request is useful. A weak model can over-refuse. On the AdventureWorks result, `qwen2.5:3b` routed 19.8% of requests correctly and over-refused 68.9%, while its executed answers remained correct.
-
-## Caveats
-
-- AdventureWorks has 6 of 9 completed model comparisons; slow local runs did not complete the remaining cells.
-- RSS and CPU figures in the cards sample the benchmark harness process, not the loaded model server, so they are not model-memory measurements.
-- The fixture is intentionally small and deterministic; it validates the mechanism, not real-world coverage.
-- Routing quality depends on the model and vocabulary. Governance removes the raw-SQL execution path; it does not make a poor router useful.
-
-For the narrative failure analysis, see [error-analysis.md](error-analysis.md).
+- These results apply to the five declared packs, tested local models, prompts,
+  and evaluation conditions. They do not establish universal correctness or
+  production readiness.
+- A governed call can be structurally valid and still answer the wrong question.
+- AdventureWorks has 19 alias-mismatch cases among 250 raw failures. TPC-H has
+  no alias mismatches among its 197 raw failures.

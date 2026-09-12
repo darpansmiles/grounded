@@ -34,10 +34,13 @@ docs/ai-pm-roadmap-alignment.md
 docs/first-user-feedback.md
 docs/enterprise-ai-problem-statement.md
 docs/grounded-problem-solution-mapping.md
+docs/case-study-source-answers.md
+docs/case-study.md
 
 # Raw benchmark payloads are local; keep the small Markdown result summaries tracked.
 evals/results/*.json
 evals/results/*.md
+!evals/results/benchmark-*-runs3.md
 evals/benchmark.json
 evals/model_card.json
 audit.log.jsonl

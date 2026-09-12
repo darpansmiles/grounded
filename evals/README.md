@@ -85,7 +85,22 @@ measures that answer-level failure; it is not a guarantee. This is a system
 comparison, catalog plus governed tools versus schema plus SQL, and does not
 isolate the mechanism.
 
-[RERUN: four-dimension comparison table with denominators]
+## Runs=3 five-pack results
+
+Each pack passed the evaluator self-test. The ranges below are across the nine
+local models; full per-model numerators and denominators are in
+[docs/benchmarks.md](../docs/benchmarks.md).
+
+| Pack | In-catalog cases / model | Gov. correct / answered | Gov. wrong / all | Evidence / all | Raw SQL correct / answered |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| AdventureWorks | 213 | 0.0%–94.3% | 5.6%–40.8% | 7.0%–94.4% | 0.0%–9.9% |
+| TPC-H | 228 | 10.5%–98.7% | 1.3%–47.4% | 50.0%–98.7% | 0.0% |
+| Spider world_1 | 93 | 79.3%–100.0% | 0.0%–19.4% | 83.9%–100.0% | 0.0%–13.3% |
+| BIRD california_schools | 69 | 60.0%–100.0% | 0.0%–39.1% | 39.1%–78.3% | 0.0%–15.4% |
+| Fixture | 30 | 0.0%–100.0% | 0.0%–30.0% | 10.0%–100.0% | 0.0% or n/a |
+
+The fixture is a small deterministic pack. Its percentages are useful for
+testing the harness, not for a real-workload claim.
 
 ## Faithfulness judge
 

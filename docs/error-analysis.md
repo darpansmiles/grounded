@@ -18,7 +18,14 @@ intend. Those are `wrong_answer` outcomes when the executed rows differ from
 the independently computed expected answer. A refusal of an answerable task is
 an `over_refusal` outcome.
 
-[RERUN: governed failure taxonomy, including wrong_answer_rate and denominator]
+The runs=3 in-catalog result shows the governed wrong-answer distribution
+directly. Stronger models range from low single digits on AdventureWorks and
+TPC-H to zero in several Spider and BIRD rows. Smaller or less useful models
+still fail visibly: 87 / 213 AdventureWorks cases for mistral:7b, 108 / 228
+TPC-H cases for mistral:7b, 18 / 93 Spider cases for llama3.2:3b, and 27 / 69
+BIRD cases for phi3.5. The fixture is deliberately tiny, with 30 in-catalog
+cases per model, and is not a workload claim. Full model-by-model denominators
+are in [benchmarks.md](benchmarks.md).
 
 The four scored dimensions stay separate: answer correctness, interface
 compliance, policy compliance, and evidence completeness. Each governed answer
@@ -35,7 +42,10 @@ column. A query can also execute and still return rows that do not answer the
 question. The corrected scorer keeps those modes visible instead of collapsing
 them into one reassuring percentage.
 
-[RERUN: ungoverned failure taxonomy by pack, model, and denominator]
+Across the same runs, raw-SQL correct-when-answered ranged from 0.0% to 9.9%
+on AdventureWorks, 0.0% throughout TPC-H, 0.0% to 13.3% on Spider, and 0.0%
+to 15.4% on BIRD. The full five-pack tables keep the raw answer and wrong
+denominators visible in [benchmarks.md](benchmarks.md).
 
 A representative historical raw-SQL failure remains useful as an execution
 example:
@@ -63,8 +73,6 @@ comparison is used as evidence.
 
 ## Limits
 
-- The old result cards are superseded because their governed answer-level
-  figures were constructed from routing rather than measured execution.
 - The rerun reports only the cases and models it actually completes. Incomplete
   cells are not treated as evidence.
 - The fixture remains a small deterministic test surface, not a workload claim.

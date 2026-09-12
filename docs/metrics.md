@@ -48,7 +48,24 @@ when its denominator is zero rather than being presented as a perfect score.
 | `routing_accuracy` | Exact declared-plan match among answerable governed proposals. |
 | `schema_break_rate` | Raw SQL schema breaks divided by applicable raw attempts. |
 
-[RERUN: four-dimension result table with denominators]
+## Runs=3 five-pack summary
+
+The table reports the observed range across the nine local models. The
+in-catalog denominator is fixed within each pack for wrong answers and
+evidence; the conditional correct denominator changes with answered cases.
+The full per-model numerators and denominators are in
+[benchmarks.md](benchmarks.md).
+
+| Pack | In-catalog cases / model | Gov. correct / answered | Gov. wrong / all | Gov. evidence / all | Raw SQL correct / answered |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| AdventureWorks | 213 | 0.0%–94.3% | 5.6%–40.8% | 7.0%–94.4% | 0.0%–9.9% |
+| TPC-H | 228 | 10.5%–98.7% | 1.3%–47.4% | 50.0%–98.7% | 0.0% |
+| Spider world_1 | 93 | 79.3%–100.0% | 0.0%–19.4% | 83.9%–100.0% | 0.0%–13.3% |
+| BIRD california_schools | 69 | 60.0%–100.0% | 0.0%–39.1% | 39.1%–78.3% | 0.0%–15.4% |
+| Fixture | 30 | 0.0%–100.0% | 0.0%–30.0% | 10.0%–100.0% | 0.0% or n/a |
+
+The fixture has small denominators and is deterministic. Its range validates
+the harness surface rather than a real-workload claim.
 
 A model can have a low raw answer-error rate only because it schema-breaks or
 refuses almost everything. A valid governed call can still select the wrong

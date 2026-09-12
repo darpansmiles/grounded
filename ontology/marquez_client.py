@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 
 DEFAULT_MARQUEZ_URL = "http://localhost:5050"
-GROUNDED_OL_PRODUCER = "https://github.com/grounded-flagship/grounded"
+GROUNDED_OL_PRODUCER = "https://github.com/darpansmiles/grounded"
 RUN_EVENT_SCHEMA_URL = "https://openlineage.io/spec/2-0-0/OpenLineage.json#/definitions/RunEvent"
 _LOGGER = logging.getLogger(__name__)
 

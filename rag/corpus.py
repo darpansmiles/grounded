@@ -72,7 +72,7 @@ def load_corpus() -> list[dict[str, str]]:
         *_semantic_description_chunks(),
         *_paragraph_chunks(_ROOT / "docs" / "contracts.md"),
         *_paragraph_chunks(
-            _ROOT / "docs" / "flagship.md",
+            _ROOT / "docs" / "whitepaper.md",
             headings=_FLAGSHIP_POLICY_HEADINGS,
         ),
         *_paragraph_chunks(_ROOT / "rag" / "data_dictionary.md"),

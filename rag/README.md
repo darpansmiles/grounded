@@ -2,7 +2,7 @@
 
 This package indexes a deliberately small corpus: declared metric descriptions,
 the governance prose in `docs/contracts.md` and the policy sections of
-`docs/flagship.md`, and `rag/data_dictionary.md`. It is not a source of
+`docs/whitepaper.md`, and `rag/data_dictionary.md`. It is not a source of
 governed numbers. Numeric questions continue through `query_metric` and the
 metric tree.
 

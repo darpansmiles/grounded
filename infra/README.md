@@ -156,7 +156,7 @@ Before posting, the real-lineage normalizer enriches every RunEvent with the
 OpenLineage 2.0.0 `schemaURL`. It records the dlt events as produced by
 `infra/ingest.py` and derives SQLMesh events by iterating the loaded
 `Context.models` and SQLMesh's `column_dependencies` API. Both producers use
-the stable project URI `https://github.com/grounded-flagship/grounded`.
+the stable project URI `https://github.com/darpansmiles/grounded`.
 
 ### Verification record
 
