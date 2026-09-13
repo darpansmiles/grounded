@@ -4,11 +4,11 @@
 - runs: 3
 - evaluator self-test: passed
 - method: executed produced governed calls and raw-SQL controls, both compared with independently computed direct-SQL truth
-- collection commit: `1f1f58a`
-- scoring commit: `397555a`
+- scoring commit: `444899c902651881a832b933c7317c8698266f74`
+- rendered at commit: `444899c`
 - capture SHA-256: `01faf49e6ae8eef026e3e4ba283e750222c354b15d5b0c5dc583638343f9f9dc`
 - dataset snapshot: `datasets/bird_ca_schools` tree `b8534df9640928804091c94fd68a5e3f14179337`
-- reproduction: `.venv/bin/python -m evals.benchmark --dataset bird_ca_schools --runs 3 --capture-path .grounded/captures/bird-final-r3.jsonl && .venv/bin/python -m evals.compare --capture-path .grounded/captures/bird-final-r3.jsonl --offline-output .grounded/scores/bird-final-r3-review-066.json`
+- reproduction: `.venv/bin/python -m evals.benchmark --dataset bird_ca_schools --runs 3 --capture-path .grounded/captures/bird-final-r3.jsonl && .venv/bin/python -m evals.compare --capture-path .grounded/captures/bird-final-r3.jsonl --offline-output .grounded/scores/bird-final-r3-review-069.json`
 
 Correct is conditional on answered in-catalog cases. Wrong, interface, and
 evidence use all 69 in-catalog cases. There are no applicable policy cases.

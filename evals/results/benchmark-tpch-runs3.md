@@ -4,11 +4,11 @@
 - runs: 3
 - evaluator self-test: passed
 - method: executed produced governed calls and raw-SQL controls, both compared with independently computed direct-SQL truth
-- collection commit: `1f1f58a`
-- scoring commit: `397555a`
+- scoring commit: `444899c902651881a832b933c7317c8698266f74`
+- rendered at commit: `444899c`
 - capture SHA-256: `d4c7214083533d814bd3520b648bbda62e7548d2a0fc928def8874a8a1166f7c`
 - dataset snapshot: `datasets/tpch` tree `fabff8c205022175d782236415aed1e64a46184c`
-- reproduction: `.venv/bin/python -m evals.benchmark --dataset tpch --runs 3 --capture-path .grounded/captures/tpch-final-r3.jsonl && .venv/bin/python -m evals.compare --capture-path .grounded/captures/tpch-final-r3.jsonl --offline-output .grounded/scores/tpch-final-r3-review-066.json`
+- reproduction: `.venv/bin/python -m evals.benchmark --dataset tpch --runs 3 --capture-path .grounded/captures/tpch-final-r3.jsonl && .venv/bin/python -m evals.compare --capture-path .grounded/captures/tpch-final-r3.jsonl --offline-output .grounded/scores/tpch-final-r3-review-069.json`
 
 Correct is conditional on answered in-catalog cases. Wrong, interface, and
 evidence use all 228 in-catalog cases. Policy has 3 applicable cases.

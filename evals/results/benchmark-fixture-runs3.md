@@ -4,11 +4,11 @@
 - runs: 3
 - evaluator self-test: passed
 - method: executed produced governed calls and raw-SQL controls, both compared with independently computed direct-SQL truth
-- collection commit: `1f1f58a`
-- scoring commit: `397555a`
+- scoring commit: `444899c902651881a832b933c7317c8698266f74`
+- rendered at commit: `444899c`
 - capture SHA-256: `22ab8c857a43b34de5d11541e88f22f30b85d9fc23eb9acdf92398e3e9c590d1`
 - dataset snapshot: `datasets/fixture` tree `55c04265fd544f017c0826c3f2fcd9c4f29397e0`
-- reproduction: `.venv/bin/python -m evals.benchmark --dataset fixture --runs 3 --capture-path .grounded/captures/fixture-final-r3.jsonl && .venv/bin/python -m evals.compare --capture-path .grounded/captures/fixture-final-r3.jsonl --offline-output .grounded/scores/fixture-final-r3-review-066.json`
+- reproduction: `.venv/bin/python -m evals.benchmark --dataset fixture --runs 3 --capture-path .grounded/captures/fixture-final-r3.jsonl && .venv/bin/python -m evals.compare --capture-path .grounded/captures/fixture-final-r3.jsonl --offline-output .grounded/scores/fixture-final-r3-review-069.json`
 
 This deterministic pack has 30 in-catalog cases per model. Its small
 denominators make it a harness test surface, not a workload claim. Correct is
