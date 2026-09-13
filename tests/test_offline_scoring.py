@@ -11,6 +11,7 @@ from evals import offline_scoring
 from evals.offline_scoring import (
     _METRIC_TOLERANCES,
     _aliases_for_metric,
+    _arm_summary,
     captured_rows_match,
     evaluator_self_test,
     independent_rows,
@@ -238,7 +239,7 @@ def test_legacy_truncated_governed_rows_use_the_opt_in_full_recovery(tmp_path, m
         governed_rows_recoverer=recover,
     )
 
-    assert old["governed"]["answer_correctness"] == "wrong"
+    assert old["governed"]["answer_correctness"] == "unscorable"
     assert replayed["governed"]["answer_correctness"] == "correct"
     assert replayed["governed_recovery"] == {
         "attempted": True,
@@ -248,6 +249,51 @@ def test_legacy_truncated_governed_rows_use_the_opt_in_full_recovery(tmp_path, m
     assert recovered == [
         {"dataset": "fixture", "db_path": database, "case_id": "rev-total-lastmonth"}
     ]
+
+
+def test_legacy_truncated_raw_rows_are_unscorable_until_recovered(tmp_path, monkeypatch):
+    database = tmp_path / "fixture.duckdb"
+    seed_database(str(database))
+    expected = [{"revenue": 123.46} for _ in range(51)]
+    captured = [{"total_revenue": 123.456} for _ in range(51)]
+    record = _metric_record()
+    record["_capture_manifest"] = {"schema_version": 2}
+    record["ungoverned"]["rows"] = captured[:50]
+    record["ungoverned"]["row_count"] = len(captured)
+    record["ungoverned"]["rows_hash"] = rows_content_hash(captured)
+    monkeypatch.setattr(
+        offline_scoring, "independent_rows", lambda *_args, **_kwargs: expected
+    )
+
+    old = score_record(record, dataset="fixture", db_path=database)
+    replayed = score_record(
+        record,
+        dataset="fixture",
+        db_path=database,
+        raw_rows_recoverer=lambda *_args: expected,
+    )
+
+    assert old["ungoverned"]["answer_correctness"] == "unscorable"
+    assert old["ungoverned"]["summary_label"] == "unscored"
+    assert replayed["ungoverned"]["answer_correctness"] == "correct"
+    assert replayed["raw_recovery"] == {
+        "attempted": True,
+        "reexec_error": None,
+        "full_row_count": 51,
+    }
+
+
+def test_unscorable_answers_are_reported_and_excluded_from_wrong_rate():
+    summary = _arm_summary(
+        [
+            {"governed": {"answer_correctness": "wrong", "summary_label": "wrong_answer", "interface_compliance": "compliant", "policy_compliance": "n/a", "evidence_completeness": "complete", "schema_break": "n/a"}},
+            {"governed": {"answer_correctness": "unscorable", "summary_label": "unscored", "interface_compliance": "compliant", "policy_compliance": "n/a", "evidence_completeness": "complete", "schema_break": "n/a"}},
+        ],
+        "governed",
+    )
+
+    assert summary["unscorable_count"] == 1
+    assert summary["wrong_answer_rate"] == {"numerator": 1, "denominator": 1, "rate": 1.0}
 
 
 def test_governed_recovery_does_not_run_for_a_complete_legacy_preview(tmp_path):

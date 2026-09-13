@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import duckdb
+import yaml
 
 from agent.ungoverned import extract_sql, is_single_select
 
@@ -32,6 +33,7 @@ class TruthUnavailable(RuntimeError):
 GovernedRowsRecoverer = Callable[
     [dict[str, Any], str, str | Path | None], list[dict[str, Any]]
 ]
+RawRowsRecoverer = Callable[[dict[str, Any], str, str | Path | None], list[dict[str, Any]]]
 
 
 @dataclass(frozen=True)
@@ -270,6 +272,45 @@ def captured_rows_match(
             and content_hash in expected_hashes
         )
     return rows_match(actual, expected, alias_map=alias_map, metric=metric)
+
+
+def _legacy_rows_are_truncated(rows: Any, row_count: Any, legacy_hash: bool) -> bool:
+    """Identify previews that cannot prove a normalized answer without recovery."""
+    return (
+        legacy_hash
+        and isinstance(rows, list)
+        and isinstance(row_count, int)
+        and row_count > len(rows)
+    )
+
+
+def make_raw_rows_recoverer() -> RawRowsRecoverer:
+    """Recover a stored, single-statement raw control result without inference."""
+
+    def recover(
+        record: dict[str, Any], dataset: str, db_path: str | Path | None
+    ) -> list[dict[str, Any]]:
+        raw = record.get("ungoverned")
+        raw = raw if isinstance(raw, dict) else {}
+        candidate = raw.get("raw_sql") or record.get("ungoverned_sql") or ""
+        sql = extract_sql(candidate) if isinstance(candidate, str) else ""
+        if not is_single_select(sql):
+            raise ValueError("Stored raw SQL is not one SELECT statement.")
+        path = Path(db_path) if db_path is not None else Path("data") / f"{dataset}.duckdb"
+        if not path.exists():
+            raise TruthUnavailable(f"Raw recovery database is unavailable: {path}")
+        connection = duckdb.connect(str(path), read_only=True)
+        try:
+            cursor = connection.execute(sql)
+            columns = [column[0] for column in cursor.description]
+            return [
+                {column: _canonical(value) for column, value in zip(columns, row)}
+                for row in cursor.fetchall()
+            ]
+        finally:
+            connection.close()
+
+    return recover
 
 
 _METRIC_TOLERANCES: dict[str, Decimal] = {
@@ -602,6 +643,7 @@ def score_record(
     dataset: str,
     db_path: str | Path | None = None,
     governed_rows_recoverer: GovernedRowsRecoverer | None = None,
+    raw_rows_recoverer: RawRowsRecoverer | None = None,
 ) -> dict[str, Any]:
     """Score captured governed and raw attempts without model or resolver calls."""
     record = {**record, "dataset": dataset}
@@ -627,6 +669,8 @@ def score_record(
         except TruthUnavailable:
             unscoped_rows = None
     governed_count, governed_hash, raw_count, raw_hash, legacy_hash = _capture_hashes(record)
+    governed_legacy_hash = legacy_hash
+    raw_legacy_hash = legacy_hash
 
     governed_plan = record.get("produced_plan") or {}
     governed_answered = governed_plan.get("tool") != "refuse" and bool(record.get("governed_executed"))
@@ -647,12 +691,15 @@ def score_record(
             # complete rows. The legacy exact fingerprint must not participate.
             governed_count = None
             governed_hash = None
-            legacy_hash = False
+            governed_legacy_hash = False
         except Exception as exc:  # noqa: BLE001 - surface a replay failure, never invent rows.
             governed_recovery["reexec_error"] = f"{type(exc).__name__}: {exc}"
+    governed_unscorable = _legacy_rows_are_truncated(
+        governed_rows, governed_count, governed_legacy_hash
+    )
     governed_correctness = "n/a"
     if expected_metric and governed_answered and expected_rows is not None:
-        governed_correctness = (
+        governed_correctness = "unscorable" if governed_unscorable else (
             "correct"
             if captured_rows_match(
                 governed_rows,
@@ -661,7 +708,7 @@ def score_record(
                 content_hash=governed_hash,
                 alias_map=aliases,
                 metric=metric,
-                legacy_hash=legacy_hash,
+                legacy_hash=governed_legacy_hash,
             )
             else "wrong"
         )
@@ -687,9 +734,27 @@ def score_record(
     raw_refusal = _is_refusal_text(raw_candidate)
     raw_rows = raw.get("rows") if raw else record.get("ungoverned_rows")
     raw_answered = not raw_refusal and bool(raw_sql)
+    raw_recovery = {
+        "attempted": False,
+        "reexec_error": None,
+        "full_row_count": None,
+    }
+    if raw_rows_recoverer is not None and _legacy_rows_are_truncated(
+        raw_rows, raw_count, raw_legacy_hash
+    ):
+        raw_recovery["attempted"] = True
+        try:
+            raw_rows = raw_rows_recoverer(record, dataset, db_path)
+            raw_recovery["full_row_count"] = len(raw_rows)
+            raw_count = None
+            raw_hash = None
+            raw_legacy_hash = False
+        except Exception as exc:  # noqa: BLE001 - unavailable rows must never be guessed.
+            raw_recovery["reexec_error"] = f"{type(exc).__name__}: {exc}"
+    raw_unscorable = _legacy_rows_are_truncated(raw_rows, raw_count, raw_legacy_hash)
     raw_correctness = "n/a"
     if expected_metric and raw_rows is not None and expected_rows is not None:
-        raw_correctness = (
+        raw_correctness = "unscorable" if raw_unscorable else (
             "correct"
             if captured_rows_match(
                 raw_rows,
@@ -698,7 +763,7 @@ def score_record(
                 content_hash=raw_hash,
                 alias_map=aliases,
                 metric=metric,
-                legacy_hash=legacy_hash,
+                legacy_hash=raw_legacy_hash,
             )
             else "wrong"
         )
@@ -732,6 +797,7 @@ def score_record(
             "schema_break": "n/a",
         },
         "governed_recovery": governed_recovery,
+        "raw_recovery": raw_recovery,
         "ungoverned": {
             "answer_correctness": raw_correctness,
             "interface_compliance": "compliant" if raw_refusal or is_single_select(raw_sql) else "noncompliant",
@@ -749,10 +815,7 @@ def _needs_governed_row_recovery(record: dict[str, Any], *, legacy_hash: bool) -
     row_count = record.get("governed_row_count")
     plan = record.get("produced_plan")
     return (
-        legacy_hash
-        and isinstance(rows, list)
-        and isinstance(row_count, int)
-        and row_count > len(rows)
+        _legacy_rows_are_truncated(rows, row_count, legacy_hash)
         and record.get("governed_executed") is True
         and isinstance(plan, dict)
         and plan.get("tool") != "refuse"
@@ -767,12 +830,18 @@ def _rate(matches: list[bool]) -> dict[str, int | float | None]:
 
 def _arm_summary(samples: list[dict[str, Any]], arm: str) -> dict[str, Any]:
     values = [sample[arm] for sample in samples]
+    scoreable = [value for value in values if value["answer_correctness"] != "unscorable"]
     answered = [value for value in values if value["answer_correctness"] in {"correct", "wrong"}]
     return {
         "answer_correctness_when_answered": _rate(
             [value["answer_correctness"] == "correct" for value in answered]
         ),
-        "wrong_answer_rate": _rate([value["summary_label"] == "wrong_answer" for value in values]),
+        "wrong_answer_rate": _rate(
+            [value["summary_label"] == "wrong_answer" for value in scoreable]
+        ),
+        "unscorable_count": sum(
+            value["answer_correctness"] == "unscorable" for value in values
+        ),
         "over_refusal_rate": _rate([value["summary_label"] == "over_refusal" for value in values]),
         "correct_refusal_rate": _rate([value["summary_label"] == "correct_refusal" for value in values]),
         "interface_compliance_rate": _rate(
@@ -837,6 +906,22 @@ def _git_revision(*args: str) -> str:
     return completed.stdout.strip()
 
 
+def _golden_case_ids_at_revision(revision: str, dataset_path: str) -> list[str]:
+    """Read the expected case universe from the scored pack definition."""
+    completed = subprocess.run(
+        ["git", "show", f"{revision}:{dataset_path}/golden.yml"],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    payload = yaml.safe_load(completed.stdout)
+    if not isinstance(payload, list) or not all(
+        isinstance(case, dict) and isinstance(case.get("case_id"), str) for case in payload
+    ):
+        raise ValueError(f"{dataset_path}/golden.yml has no valid case-id inventory.")
+    return sorted(case["case_id"] for case in payload)
+
+
 def _record_case_run(
     inventory: dict[str, dict[str, list[int]]], record: dict[str, Any]
 ) -> None:
@@ -876,11 +961,12 @@ def _review_provenance(
     ):
         raise ValueError("Capture manifest requires a string model roster.")
     dataset_path = f"datasets/{dataset}"
+    scoring_commit = _git_revision("HEAD")
     return {
         "capture_filename": capture_path.name,
         "capture_sha256": _sha256_file(capture_path),
         "collection_commit": manifest.get("collection_commit"),
-        "scoring_commit": _git_revision("HEAD"),
+        "scoring_commit": scoring_commit,
         "dataset_identity": {
             "name": dataset,
             "path": dataset_path,
@@ -900,6 +986,7 @@ def _review_provenance(
                 for model, case_runs in sorted(inventory.items())
             },
         },
+        "expected_case_ids": _golden_case_ids_at_revision(scoring_commit, dataset_path),
     }
 
 
@@ -974,6 +1061,7 @@ def score_capture_files(
     *,
     db_path: str | Path | None = None,
     governed_rows_recoverer: GovernedRowsRecoverer | None = None,
+    raw_rows_recoverer: RawRowsRecoverer | None = None,
 ) -> dict[str, Any]:
     """Score captured JSONL offline, rejecting output until the evaluator gate passes."""
     gate = evaluator_self_test()
@@ -999,6 +1087,7 @@ def score_capture_files(
                 dataset=record_dataset,
                 db_path=db_path,
                 governed_rows_recoverer=governed_rows_recoverer,
+                raw_rows_recoverer=raw_rows_recoverer,
             )
         )
         grouped[str(sample.get("model"))].append(sample)
@@ -1017,6 +1106,19 @@ def score_capture_files(
             ),
             "reexec_errors": sum(
                 sample["governed_recovery"]["reexec_error"] is not None
+                for model_samples in grouped.values()
+                for sample in model_samples
+            ),
+        },
+        "raw_recovery": {
+            "enabled": raw_rows_recoverer is not None,
+            "attempted": sum(
+                sample["raw_recovery"]["attempted"]
+                for model_samples in grouped.values()
+                for sample in model_samples
+            ),
+            "reexec_errors": sum(
+                sample["raw_recovery"]["reexec_error"] is not None
                 for model_samples in grouped.values()
                 for sample in model_samples
             ),

@@ -937,6 +937,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--recover-raw",
+        action="store_true",
+        help=(
+            "Deterministically replay only stored raw SELECT statements whose legacy "
+            "large result preview would otherwise be unscorable."
+        ),
+    )
+    parser.add_argument(
         "--cube-url",
         help="Cube API URL for --recover-governed; defaults to the local resolver URL.",
     )
@@ -952,16 +960,22 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.capture_path:
         try:
             governed_rows_recoverer = None
+            raw_rows_recoverer = None
             if arguments.recover_governed:
                 from evals.governed_recovery import make_governed_rows_recoverer
 
                 governed_rows_recoverer = make_governed_rows_recoverer(
                     cube_url=arguments.cube_url
                 )
+            if arguments.recover_raw:
+                from evals.offline_scoring import make_raw_rows_recoverer
+
+                raw_rows_recoverer = make_raw_rows_recoverer()
             report = score_capture_files(
                 arguments.capture_path,
                 db_path=arguments.truth_db_path,
                 governed_rows_recoverer=governed_rows_recoverer,
+                raw_rows_recoverer=raw_rows_recoverer,
             )
             if arguments.offline_output:
                 write_offline_score(report, arguments.offline_output)
@@ -971,6 +985,7 @@ def main(argv: list[str] | None = None) -> int:
                         "dataset": report["dataset"],
                         "evaluator_self_test": report["evaluator_self_test"],
                         "governed_recovery": report["governed_recovery"],
+                        "raw_recovery": report["raw_recovery"],
                         "models": sorted(report["models"]),
                     },
                     indent=2,

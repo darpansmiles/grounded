@@ -5,9 +5,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import subprocess
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 _PACKS: dict[str, dict[str, str]] = {
     "adventureworks": {
@@ -82,9 +85,15 @@ def _rate_cell(value: dict[str, Any]) -> str:
     denominator = value.get("denominator")
     rate = value.get("rate")
     if denominator in (None, 0) or rate is None:
+        if rate is not None or numerator not in (None, 0) or denominator not in (None, 0):
+            raise ValueError(f"Invalid NA rate: {value!r}")
         return "NA (0/0)"
     if not isinstance(numerator, int) or not isinstance(denominator, int):
         raise TypeError(f"Invalid rate denominator: {value!r}")
+    if not isinstance(rate, (int, float)) or not 0 <= numerator <= denominator:
+        raise ValueError(f"Invalid rate value: {value!r}")
+    if not math.isclose(float(rate), numerator / denominator, rel_tol=0, abs_tol=1e-12):
+        raise ValueError(f"Rate does not equal numerator/denominator: {value!r}")
     return f"{float(rate) * 100:.1f}% ({numerator}/{denominator})"
 
 
@@ -138,6 +147,53 @@ def _capture_inventory(path: Path) -> dict[str, Any]:
     }
 
 
+def _review_sample_inventory(review: dict[str, Any]) -> dict[str, dict[str, list[int]]]:
+    """Extract the scored samples' independent model/case/run inventory."""
+    inventory: dict[str, dict[str, list[int]]] = {}
+    for model, model_review in review.get("models", {}).items():
+        if not isinstance(model, str) or not isinstance(model_review, dict):
+            raise TypeError("Review has an invalid model entry.")
+        for sample in model_review.get("samples", []):
+            if not isinstance(sample, dict):
+                raise TypeError(f"Review sample for {model!r} is invalid.")
+            case_id = sample.get("case_id")
+            run = sample.get("run")
+            if not isinstance(case_id, str) or not isinstance(run, int):
+                raise TypeError(f"Review sample for {model!r} lacks case_id/run.")
+            inventory.setdefault(model, {}).setdefault(case_id, []).append(run)
+    return {
+        model: {
+            case_id: sorted(runs) for case_id, runs in sorted(case_runs.items())
+        }
+        for model, case_runs in sorted(inventory.items())
+    }
+
+
+def _dataset_tree_at_revision(revision: str, dataset_path: str) -> str:
+    completed = subprocess.run(
+        ["git", "rev-parse", f"{revision}:{dataset_path}"],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def _expected_case_ids_at_revision(revision: str, dataset_path: str) -> list[str]:
+    completed = subprocess.run(
+        ["git", "show", f"{revision}:{dataset_path}/golden.yml"],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    payload = yaml.safe_load(completed.stdout)
+    if not isinstance(payload, list) or not all(
+        isinstance(case, dict) and isinstance(case.get("case_id"), str) for case in payload
+    ):
+        raise ValueError(f"{dataset_path}/golden.yml has no valid case-id inventory.")
+    return sorted(case["case_id"] for case in payload)
+
+
 def _validate_provenance(review: dict[str, Any], capture_path: Path) -> dict[str, Any]:
     provenance = review.get("provenance")
     if not isinstance(provenance, dict):
@@ -160,6 +216,8 @@ def _validate_provenance(review: dict[str, Any], capture_path: Path) -> dict[str
         or not isinstance(dataset_identity.get("tree"), str)
     ):
         raise ValueError("Review dataset identity does not match the card dataset.")
+    if _dataset_tree_at_revision(scoring_commit, expected_path) != dataset_identity["tree"]:
+        raise ValueError("Recorded dataset tree does not match the scoring revision.")
     inventory = provenance.get("case_run_inventory")
     if not isinstance(inventory, dict) or inventory != _capture_inventory(capture_path):
         raise ValueError("Capture case/run inventory does not match the reviewed scoring input.")
@@ -178,6 +236,13 @@ def _validate_provenance(review: dict[str, Any], capture_path: Path) -> dict[str
         raise ValueError("Review has an incomplete case/run inventory.")
     if sorted(review.get("models", {})) != expected_models:
         raise ValueError("Review models do not match the capture roster.")
+    declared_cases = provenance.get("expected_case_ids")
+    if declared_cases != _expected_case_ids_at_revision(scoring_commit, expected_path):
+        raise ValueError("Review expected-case inventory does not match the scored pack.")
+    if expected_cases != declared_cases:
+        raise ValueError("Capture is missing an expected case or contains an undeclared case.")
+    if _review_sample_inventory(review) != model_inventory:
+        raise ValueError("Scored samples do not reconcile to the capture inventory.")
     for model in expected_models:
         case_runs = model_inventory.get(model)
         if not isinstance(case_runs, dict) or sorted(case_runs) != expected_cases:
