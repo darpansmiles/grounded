@@ -114,19 +114,28 @@ argument.
   selecting the wrong metric, not only by returning an over-scoped result, and
   the denominators are small. It is not a general authorization-robustness
   claim.
-- **Validation checks.** (1) *Closed.* Earlier, legacy captures whose full
-  result exceeded the stored row preview were compared by a stored exact hash
-  rather than a rounding-normalized one, so a large result differing from
-  expected only in precision could in principle have been miscounted. Both arms
-  have now been audited directly: every raw-SQL attempt and every governed call
-  across all five packs (including all truncated records) was re-executed to
-  recover its full result and re-scored with the declared normalized comparison.
-  No label changed in either arm. The scorer now recovers and normalizes full
-  results instead of using the exact-hash fallback, so the gap cannot recur.
-  (2) *Closed.* Card provenance is now bound to the scoring inputs: each review
-  records the capture SHA-256, the scoring commit, the dataset identity, and a
-  full model-case-run inventory, and the card renderer re-verifies the capture
-  hash, dataset identity, and run inventory and refuses to emit a card on any
-  mismatch, incomplete run set, or invalid record. The scoring commit and the
-  render-time commit are shown separately. Neither check changed a published
-  number.
+- **Validation checks.** (1) Legacy captures whose full result exceeded the
+  stored row preview are compared by a stored exact hash rather than a
+  rounding-normalized one, so a large result differing from expected only in
+  precision could in principle be miscounted. To test whether this affected any
+  published label, I ran a full-result audit: every raw-SQL attempt and every
+  governed call across all five packs (including all truncated records) was
+  re-executed to recover its full result and re-scored with the declared
+  normalized comparison. No label changed in either arm. This is my own audit
+  result, not an independently reproduced one; the audit script
+  (`reexec_audit.py`) and a compact summary ([capture-normalization-audit.md](capture-normalization-audit.md))
+  are published in the repository so it can be inspected. Full-result
+  recovery is implemented (`--recover-governed`) but is opt-in: the default
+  comparison still uses captured rows and the exact-hash fallback for large
+  legacy results, so preventing recurrence (rejecting unresolved truncated
+  records as unscorable on both arms) is a planned hardening, not yet enforced.
+  (2) Card provenance is bound to the scoring inputs: each review records the
+  capture SHA-256, the scoring commit, the dataset identity, and a
+  model-case-run inventory, and the renderer re-verifies the capture hash and
+  the observed run inventory (rejecting a hash mismatch, an incomplete run set,
+  or an invalid record) and shows the scoring commit and the render-time commit
+  separately. It does not yet independently resolve and compare dataset identity
+  against the scoring revision, reconcile an independently declared expected-case
+  inventory against the scored sample, or check each printed rate against its
+  numerator and denominator; those tighter checks are planned. Neither check has
+  changed a published number.
