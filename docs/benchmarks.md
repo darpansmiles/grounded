@@ -100,6 +100,26 @@ argument.
 - Both arms are numerically normalized to the same two-decimal precision before
   comparison, so a raw value that is correct but differently rounded is not
   counted wrong. Under that symmetric comparison, raw-SQL correctness on
-  AdventureWorks is 6–22%, not near-zero; it is 0% on TPC-H. The TPC-H raw
-  failures are diagnosed as genuine wrong answers — incorrect aggregations and
-  joins and references to dimensionalized-away columns — not rounding artifacts.
+  AdventureWorks is 4.7–22.5% across the nine models (14.1–22.5% for the four
+  capable ones), not near-zero; it is 0% on TPC-H. The governed advantage is a
+  claim about the capable models: on AdventureWorks the weakest model,
+  qwen2.5:3b, answered 0% correct under governance versus 21.1% raw.
+- The diagnostic buckets for raw failures (incorrect aggregation/join, wrong
+  business definition) are **heuristic** unless manually adjudicated. A sampled
+  inspection of TPC-H raw failures found genuine wrong answers (for instance a
+  `SUM` returning roughly double the true revenue), so genuine errors are
+  present; a complete, adjudicated classification is not yet done.
+- Policy compliance here is a **scoped-result check**: it verifies the returned
+  rows match the expected role-scoped result. A case can therefore fail it by
+  selecting the wrong metric, not only by returning an over-scoped result, and
+  the denominators are small. It is not a general authorization-robustness
+  claim.
+- **Open validation checks (not yet closed).** (1) For legacy captures whose
+  full result exceeds the stored row preview, the scorer falls back to matching
+  a stored exact hash, which a later rounding-normalized hash cannot reproduce;
+  a large result differing from expected only in precision could still be
+  counted wrong. (2) Card provenance is printed but not yet enforced against the
+  scoring inputs (scoring commit defaults to the render-time checkout; the
+  review JSON is not verified to have come from the hashed capture). Neither is
+  known to affect the published numbers; the point is that the public code alone
+  does not yet prove they do not. Closing both is tracked for a follow-up audit.

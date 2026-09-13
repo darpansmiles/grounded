@@ -53,7 +53,7 @@ The tables below are in-catalog results from three runs across all five packs an
 
 AdventureWorks makes the important point plainly: the governed result is not perfect. Stronger models have single-digit wrong-answer rates, while weaker models can be much less useful. The structural boundary prevents free-form SQL, but it does not prevent a model from selecting the wrong declared metric, period, dimension, or scope.
 
-The raw-SQL arm is scored fairly: the same two-decimal rounding applied to the governed arm is applied to raw results before comparison, so a value that is correct but differently rounded is not counted as wrong. Under that symmetric comparison, raw-SQL correctness on AdventureWorks is not near-zero — it reaches roughly 6–22% depending on the model. The gap to the governed arm is therefore reported against a raw baseline given full rounding credit, not an inflated one. The remaining raw failures are genuine: wrong metric definitions, incorrect aggregations and joins, and references to schema that does not exist.
+The raw-SQL arm is scored fairly: the same two-decimal rounding applied to the governed arm is applied to raw results before comparison, so a value that is correct but differently rounded is not counted as wrong. Under that symmetric comparison, raw-SQL correctness on AdventureWorks is not near-zero — it runs 4.7% to 22.5% across the nine models, and 14.1% to 22.5% across the four capable ones. The gap to the governed arm is therefore reported against a raw baseline given full rounding credit, not an inflated one. The boundary also does not rescue a weak model: qwen2.5:3b answered 0% correct under governance on AdventureWorks against 21.1% raw, so the governed advantage is a claim about the capable models, not a universal one. A sampled inspection of raw failures found genuine errors — wrong metric definitions, incorrect aggregations and joins, and references to schema that does not exist — but a complete, adjudicated classification across all packs is still open (see the benchmark report's limits).
 
 ### TPC-H
 
@@ -69,7 +69,7 @@ The raw-SQL arm is scored fairly: the same two-decimal rounding applied to the g
 | mistral:7b | 108 / 216 (50.0%) | 108 / 228 (47.4%) | 0 / 213 (0.0%) | 213 / 228 (93.4%) |
 | qwen2.5:3b | 12 / 114 (10.5%) | 102 / 228 (44.7%) | 0 / 120 (0.0%) | 120 / 228 (52.6%) |
 
-TPC-H exposes why a raw-SQL comparison must be diagnosed, not merely counted. The raw arm scored 0% correct on TPC-H for every model, and the diagnostic now classifies why, rather than assuming it. Some failures are schema hallucination: the models frequently reference classic TPC-H fields such as `part_type`, `part_brand`, and `market_segment` that were dimensionalized away in the gold star schema. The rest are executed-but-wrong answers — queries that ran and returned the wrong number. A sample of executed raw cases bucketed into incorrect aggregations and joins and wrong business definitions; for example, `SUM(extended_price)` returned 110,927,736,019.61 where the independently computed revenue was 50,992,515,249.66, and a `COUNT(order_key)` over the fact table returned 2,999,671 rather than 364,780 orders. Because raw values are rounded the same way as the governed arm before comparison, this 0% is not a rounding artifact; it is genuine computational error on a schema the model did not understand.
+TPC-H exposes why a raw-SQL comparison must be diagnosed, not merely counted. The raw arm scored 0% correct on TPC-H for every model. A sampled diagnostic begins to classify why, rather than assuming it, though the buckets it assigns are heuristic — detecting a `SUM`, `COUNT`, or `JOIN` in an incorrect query does not by itself prove which operation caused the error, so these are indicative, not adjudicated. Some failures are schema hallucination: the models frequently reference classic TPC-H fields such as `part_type`, `part_brand`, and `market_segment` that were dimensionalized away in the gold star schema. Others are executed-but-wrong answers — queries that ran and returned the wrong number. For example, `SUM(extended_price)` returned 110,927,736,019.61 where the independently computed revenue was 50,992,515,249.66, and a `COUNT(order_key)` over the fact table returned 2,999,671 rather than 364,780 orders; these magnitudes are far too large to be rounding. Those examples establish that genuine errors are present; a complete, adjudicated classification of every raw failure — and a check that no large legacy result was misjudged on precision alone — is still open, and is documented as a limit in the benchmark report.
 
 ### Spider world_1
 
@@ -106,8 +106,10 @@ and applicable denominators for some dimensions fall to 3–9 cases, so its rate
 are noisy and do not carry the thesis. Governed correctness among models that
 returned an answer ranged from 80.0% (24 / 30) to 100.0%; governed wrong-answer
 rates ranged from 0.0% to 20.0% (0–6 / 30). The raw-SQL arm was 0% correct for
-every model except qwen2.5:14b (3 / 24, 12.5%). The full per-model denominators
-are in the [benchmark report](benchmarks.md).
+every model that had applicable cases except qwen2.5:14b (3 / 24, 12.5%); two
+models (phi3.5, qwen2.5:3b) had no applicable raw cases and are reported as N/A,
+not 0%. The full per-model denominators are in the
+[benchmark report](benchmarks.md).
 
 ## What the thesis establishes and what it does not
 
