@@ -5,7 +5,7 @@ import json
 import pytest
 import yaml
 
-from evals.compare import run_comparison
+from evals.compare import _retired_run_comparison as run_comparison
 from evals.judge import (
     StubJudge,
     faithfulness_rate,

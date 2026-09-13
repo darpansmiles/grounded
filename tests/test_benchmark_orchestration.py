@@ -15,13 +15,23 @@ import yaml
 
 from evals.benchmark import run_benchmark
 from evals.merge_cards import merge_model_cards
-from evals.orchestration import SourceUnavailable, _run_dataset, dataset_names, run_benchmark_queue
+from evals.orchestration import (
+    SourceUnavailable,
+    _run_dataset,
+    dataset_names,
+    run_benchmark_queue,
+)
+from scripts.check_source_secret import source_dsn_is_configured
+from scripts.lakehouse import available_pack_databases
+from scripts.set_secret import (
+    SECRET_NAME,
+    SOURCE_SECRET_NAMES,
+    write_source_dsn,
+    write_source_dsns,
+)
 from scripts.spine_all import SourceUnavailable as SpineSourceUnavailable
 from scripts.spine_all import _run_dataset as run_spine_dataset
 from scripts.spine_all import run_spine_queue
-from scripts.check_source_secret import source_dsn_is_configured
-from scripts.lakehouse import available_pack_databases
-from scripts.set_secret import SECRET_NAME, SOURCE_SECRET_NAMES, write_source_dsn, write_source_dsns
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_PACKAGES = {
@@ -200,9 +210,6 @@ def test_cube_pack_is_reconfigured_before_its_queued_benchmark(monkeypatch, tmp_
         calls.append((command, check))
         if command[0] == "make":
             return SimpleNamespace(returncode=0)
-        card = tmp_path / "evals" / "results" / "benchmark-cube-pack-stub.json"
-        card.parent.mkdir(parents=True, exist_ok=True)
-        card.write_text("{}", encoding="utf-8")
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(
@@ -220,10 +227,11 @@ def test_cube_pack_is_reconfigured_before_its_queued_benchmark(monkeypatch, tmp_
         (["make", "source-up", "DATASET=cube-pack"], True),
         (["make", "cube-up", "DATASET=cube-pack"], True),
         (["make", "preflight-benchmark", "DATASET=cube-pack"], True),
-        ([sys.executable, "-m", "evals.compare", "--dataset", "cube-pack"], False),
+        ([sys.executable, "-m", "evals.benchmark", "--dataset", "cube-pack", "--capture-path", ".grounded/captures/cube-pack-benchmark-all.jsonl"], False),
+        ([sys.executable, "-m", "evals.compare", "--capture-path", ".grounded/captures/cube-pack-benchmark-all.jsonl", "--offline-output", ".grounded/scores/cube-pack-benchmark-all.json"], False),
         (["make", "down", "DATASET=cube-pack"], False),
     ]
-    assert cards == ["evals/results/benchmark-cube-pack-stub.json"]
+    assert cards == [".grounded/scores/cube-pack-benchmark-all.json"]
 
 
 def test_failed_dataset_benchmark_still_tears_down_its_compose_project(monkeypatch, tmp_path):
@@ -245,7 +253,7 @@ def test_failed_dataset_benchmark_still_tears_down_its_compose_project(monkeypat
     )
     monkeypatch.setattr("evals.orchestration.subprocess.run", run)
 
-    with pytest.raises(RuntimeError, match="benchmark command exited 1"):
+    with pytest.raises(RuntimeError, match="benchmark collection exited 1"):
         _run_dataset("failed-pack")
 
     assert calls[-1] == (["make", "down", "DATASET=failed-pack"], False)

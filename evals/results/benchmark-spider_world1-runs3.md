@@ -4,6 +4,11 @@
 - runs: 3
 - evaluator self-test: passed
 - method: executed produced governed calls and raw-SQL controls, both compared with independently computed direct-SQL truth
+- collection commit: `1f1f58a`
+- scoring commit: `397555a`
+- capture SHA-256: `5704a2c179f689e377193c13b8aaf1452bea01cbce78e98ae630669e5815348c`
+- dataset snapshot: `datasets/spider_world1` tree `dc34acd23ac8f1e7133348646d4de72e37200bed`
+- reproduction: `.venv/bin/python -m evals.benchmark --dataset spider_world1 --runs 3 --capture-path .grounded/captures/spider-final-r3.jsonl && .venv/bin/python -m evals.compare --capture-path .grounded/captures/spider-final-r3.jsonl --offline-output .grounded/scores/spider-final-r3-review-066.json`
 
 Correct is conditional on answered in-catalog cases. Wrong, interface, and
 evidence use all 93 in-catalog cases. Policy has 3 applicable cases.

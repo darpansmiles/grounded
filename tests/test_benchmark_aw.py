@@ -9,7 +9,7 @@ import duckdb
 from agent.agent import answer
 from agent.ungoverned import answer_ungoverned
 from evals.benchmark import load_golden_cases
-from evals.compare import run_comparison
+from evals.compare import _retired_run_comparison as run_comparison
 from models.provider import StubProvider
 from packlib import active_pack
 from resolver.backends import cube

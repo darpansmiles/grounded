@@ -25,15 +25,15 @@ argument.
 
 | Model | Governed correct / answered | Governed wrong / all | Raw SQL correct / answered | Raw SQL wrong / all |
 | --- | --- | --- | --- | --- |
-| gemma2:9b | 90.5% (171/189) | 8.5% (18/213) | 5.6% (12/213) | 94.4% (201/213) |
-| llama3.1:8b | 87.3% (186/213) | 12.7% (27/213) | 0.0% (0/210) | 98.6% (210/213) |
-| llama3.2:3b | 62.9% (117/186) | 32.4% (69/213) | 0.0% (0/129) | 60.6% (129/213) |
-| mistral:7b | 58.6% (123/210) | 40.8% (87/213) | 0.0% (0/102) | 47.9% (102/213) |
-| phi3.5 | 57.4% (105/183) | 36.6% (78/213) | 0.0% (0/141) | 66.2% (141/213) |
-| phi4 | 94.3% (198/210) | 5.6% (12/213) | 9.9% (21/213) | 90.1% (192/213) |
-| qwen2.5:14b | 91.5% (195/213) | 8.5% (18/213) | 7.0% (15/213) | 93.0% (198/213) |
-| qwen2.5:3b | 0.0% (0/33) | 15.5% (33/213) | 0.0% (0/114) | 53.5% (114/213) |
-| qwen2.5:7b | 78.9% (168/213) | 21.1% (45/213) | 4.5% (9/201) | 90.1% (192/213) |
+| gemma2:9b | 90.5% (171/189) | 8.5% (18/213) | 14.1% (30/213) | 85.9% (183/213) |
+| llama3.1:8b | 87.3% (186/213) | 12.7% (27/213) | 5.7% (12/210) | 93.0% (198/213) |
+| llama3.2:3b | 62.9% (117/186) | 32.4% (69/213) | 4.7% (6/129) | 57.7% (123/213) |
+| mistral:7b | 58.6% (123/210) | 40.8% (87/213) | 11.8% (12/102) | 42.3% (90/213) |
+| phi3.5 | 57.4% (105/183) | 36.6% (78/213) | 14.9% (21/141) | 56.3% (120/213) |
+| phi4 | 94.3% (198/210) | 5.6% (12/213) | 22.5% (48/213) | 77.5% (165/213) |
+| qwen2.5:14b | 91.5% (195/213) | 8.5% (18/213) | 15.5% (33/213) | 84.5% (180/213) |
+| qwen2.5:3b | 0.0% (0/33) | 15.5% (33/213) | 21.1% (24/114) | 42.3% (90/213) |
+| qwen2.5:7b | 78.9% (168/213) | 21.1% (45/213) | 17.9% (36/201) | 77.5% (165/213) |
 
 ## TPC-H
 
@@ -81,15 +81,15 @@ argument.
 
 | Model | Governed correct / answered | Governed wrong / all | Raw SQL correct / answered | Raw SQL wrong / all |
 | --- | --- | --- | --- | --- |
-| gemma2:9b | 0.0% (0/3) | 10.0% (3/30) | 0.0% (0/15) | 50.0% (15/30) |
-| llama3.1:8b | 90.0% (27/30) | 10.0% (3/30) | 0.0% (0/15) | 50.0% (15/30) |
-| llama3.2:3b | 70.0% (21/30) | 30.0% (9/30) | 0.0% (0/24) | 80.0% (24/30) |
-| mistral:7b | 70.0% (21/30) | 30.0% (9/30) | 0.0% (0/12) | 40.0% (12/30) |
-| phi3.5 | 50.0% (3/6) | 10.0% (3/30) | n/a | 0.0% (0/30) |
-| phi4 | 90.0% (27/30) | 10.0% (3/30) | 0.0% (0/27) | 90.0% (27/30) |
-| qwen2.5:14b | 90.0% (27/30) | 10.0% (3/30) | 0.0% (0/24) | 80.0% (24/30) |
-| qwen2.5:3b | 100.0% (9/9) | 0.0% (0/30) | n/a | 0.0% (0/30) |
-| qwen2.5:7b | 66.7% (6/9) | 10.0% (3/30) | 0.0% (0/3) | 10.0% (3/30) |
+| gemma2:9b | 100.0% (3/3) | 0.0% (0/30) | 0.0% (0/15) | 50.0% (15/30) |
+| llama3.1:8b | 100.0% (30/30) | 0.0% (0/30) | 0.0% (0/15) | 50.0% (15/30) |
+| llama3.2:3b | 80.0% (24/30) | 20.0% (6/30) | 0.0% (0/24) | 80.0% (24/30) |
+| mistral:7b | 80.0% (24/30) | 20.0% (6/30) | 0.0% (0/12) | 40.0% (12/30) |
+| phi3.5 | 100.0% (6/6) | 0.0% (0/30) | NA (0/0) | 0.0% (0/30) |
+| phi4 | 100.0% (30/30) | 0.0% (0/30) | 0.0% (0/27) | 90.0% (27/30) |
+| qwen2.5:14b | 100.0% (30/30) | 0.0% (0/30) | 12.5% (3/24) | 70.0% (21/30) |
+| qwen2.5:3b | 100.0% (9/9) | 0.0% (0/30) | NA (0/0) | 0.0% (0/30) |
+| qwen2.5:7b | 100.0% (9/9) | 0.0% (0/30) | 0.0% (0/3) | 10.0% (3/30) |
 
 ## Limits
 
@@ -97,5 +97,9 @@ argument.
   and evaluation conditions. They do not establish universal correctness or
   production readiness.
 - A governed call can be structurally valid and still answer the wrong question.
-- AdventureWorks has 19 alias-mismatch cases among 250 raw failures. TPC-H has
-  no alias mismatches among its 197 raw failures.
+- Both arms are numerically normalized to the same two-decimal precision before
+  comparison, so a raw value that is correct but differently rounded is not
+  counted wrong. Under that symmetric comparison, raw-SQL correctness on
+  AdventureWorks is 6–22%, not near-zero; it is 0% on TPC-H. The TPC-H raw
+  failures are diagnosed as genuine wrong answers — incorrect aggregations and
+  joins and references to dimensionalized-away columns — not rounding artifacts.

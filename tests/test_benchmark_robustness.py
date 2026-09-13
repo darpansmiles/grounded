@@ -131,16 +131,9 @@ def test_resource_sampler_degrades_to_timing_only_without_psutil(monkeypatch):
     assert sampler.stop() == {"available": False, "reason": "psutil unavailable"}
 
 
-def test_comparison_cli_reports_missing_database_without_traceback(monkeypatch, capsys):
-    import duckdb
-
-    monkeypatch.setattr(
-        "evals.compare.run_comparison",
-        lambda **_kwargs: (_ for _ in ()).throw(duckdb.IOException("missing")),
-    )
-
+def test_comparison_cli_rejects_the_retired_live_scoring_path(capsys):
     assert main(["--dataset", "fixture"]) == 2
 
     captured = capsys.readouterr()
-    assert "make spine DATASET=fixture" in captured.err
+    assert "Live comparison is retired" in captured.err
     assert "Traceback" not in captured.err

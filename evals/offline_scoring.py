@@ -15,7 +15,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -171,8 +171,18 @@ def _fingerprint_value(value: Any) -> Any:
     return {"type": type(value).__name__, "value": str(value)}
 
 
+def _normalise_metric_value(value: Any, metric: str | None) -> Any:
+    """Quantize declared measures at the public response precision."""
+    if metric not in _METRIC_TOLERANCES or value is None:
+        return value
+    try:
+        return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except (InvalidOperation, TypeError, ValueError):
+        return value
+
+
 def rows_content_hash(
-    rows: list[dict[str, Any]], *, alias_map: dict[str, str] | None = None
+    rows: list[dict[str, Any]], *, alias_map: dict[str, str] | None = None, metric: str | None = None
 ) -> str:
     """Return a stable multiset fingerprint for a complete result set.
 
@@ -184,7 +194,11 @@ def rows_content_hash(
     normalized_rows = [
         json.dumps(
             {
-                aliases.get(str(key), str(key)): _fingerprint_value(value)
+                aliases.get(str(key), str(key)): _fingerprint_value(
+                    _normalise_metric_value(value, metric)
+                    if aliases.get(str(key), str(key)) == metric
+                    else value
+                )
                 for key, value in row.items()
             },
             sort_keys=True,
@@ -227,16 +241,27 @@ def captured_rows_match(
     content_hash: Any = None,
     alias_map: dict[str, str] | None = None,
     metric: str | None = None,
+    legacy_hash: bool = False,
 ) -> bool:
     """Compare legacy full rows or compact capture records against truth."""
     if expected is None:
         return False
+    if legacy_hash and actual is not None and isinstance(row_count, int) and row_count == len(actual):
+        # A schema-v2 preview is complete for small result sets. Compare those
+        # rows at the declared precision before consulting its old exact hash.
+        return rows_match(actual, expected, alias_map=alias_map, metric=metric)
     if content_hash is not None or row_count is not None:
+        expected_hashes = {rows_content_hash(expected, alias_map=alias_map, metric=metric)}
+        if legacy_hash:
+            # Schema v2 stored an exact pre-normalization fingerprint. Retaining
+            # it as an additional match prevents a bounded preview from turning
+            # a formerly complete, large result into a false wrong answer.
+            expected_hashes.add(rows_content_hash(expected, alias_map=alias_map))
         return (
             isinstance(row_count, int)
             and isinstance(content_hash, str)
             and row_count == len(expected)
-            and content_hash == rows_content_hash(expected, alias_map=alias_map)
+            and content_hash in expected_hashes
         )
     return rows_match(actual, expected, alias_map=alias_map, metric=metric)
 
@@ -302,7 +327,9 @@ def _row_matches(
                 return False
             continue
         try:
-            if abs(Decimal(str(actual_value)) - Decimal(str(expected_value))) > tolerance:
+            actual_number = _normalise_metric_value(actual_value, metric)
+            expected_number = _normalise_metric_value(expected_value, metric)
+            if abs(Decimal(str(actual_number)) - Decimal(str(expected_number))) > tolerance:
                 return False
         except (InvalidOperation, TypeError, ValueError):
             return False
@@ -494,12 +521,35 @@ def _has_required_evidence(record: dict[str, Any], metric: str) -> bool:
     )
 
 
-def _policy_matches(record: dict[str, Any], rows: list[dict[str, Any]] | None) -> bool | None:
-    """Check only policy obligations applicable to the requested role/case."""
+def _capture_hashes(record: dict[str, Any]) -> tuple[Any, Any, Any, Any, bool]:
+    """Return compact metadata and whether it predates normalized hashes."""
+    manifest = record.get("_capture_manifest")
+    raw = record.get("ungoverned")
+    raw = raw if isinstance(raw, dict) else {}
+    return (
+        record.get("governed_row_count"),
+        record.get("governed_rows_hash"),
+        raw.get("row_count", record.get("ungoverned_row_count")),
+        raw.get("rows_hash", record.get("ungoverned_rows_hash")),
+        not isinstance(manifest, dict) or manifest.get("schema_version", 0) < 3,
+    )
+
+
+def _policy_matches(
+    record: dict[str, Any],
+    rows: list[dict[str, Any]] | None,
+    *,
+    arm: str,
+    scoped_rows: list[dict[str, Any]] | None,
+    unscoped_rows: list[dict[str, Any]] | None,
+    metric: str,
+    aliases: dict[str, str],
+) -> bool | None:
+    """Check policy independently for each arm, never borrowing a marker."""
     expected_type = record.get("expect", {}).get("type")
     if expected_type == "policy":
         expected_decision = record.get("expect", {}).get("decision")
-        return any(
+        return arm == "governed" and any(
             isinstance(decision, dict) and decision.get("decision") == expected_decision
             for decision in record.get("policy_decisions") or []
         )
@@ -513,17 +563,19 @@ def _policy_matches(record: dict[str, Any], rows: list[dict[str, Any]] | None) -
         isinstance(decision, dict) and decision.get("rule") == "row_filter"
         for decision in policy_decisions
     )
-    if not has_row_filter:
+    if arm == "governed" and not has_row_filter:
         return False
     if rows is None:
         return False
-    dataset = record.get("dataset")
-    constrained_dimension = "country" if dataset in {"fixture", "adventureworks"} else "region"
-    allowed = {"DE", "FR", "NL"} if constrained_dimension == "country" else {"EUROPE"}
-    return all(
-        constrained_dimension not in row or row[constrained_dimension] in allowed
-        for row in rows
-    )
+    if scoped_rows is None or unscoped_rows is None:
+        return False
+    if rows_match(rows, scoped_rows, alias_map=aliases, metric=metric):
+        return True
+    # An aggregate can omit the scoped dimension, so a policy marker alone
+    # cannot prove it was filtered. Explicitly reject the global counterpart.
+    if rows_match(rows, unscoped_rows, alias_map=aliases, metric=metric):
+        return False
+    return False
 
 
 def _answer_label(expected_refusal: bool, answered: bool, correctness: str) -> str:
@@ -556,6 +608,15 @@ def score_record(
             truth_error = str(exc)
     metric = record.get("expected_plan", {}).get("args", {}).get("metric", "")
     aliases = _aliases_for_metric(metric) if isinstance(metric, str) else {}
+    unscoped_rows: list[dict[str, Any]] | None = None
+    if expected_metric and record.get("role") == "eu_analyst":
+        try:
+            unscoped_rows = independent_rows(
+                dataset, record["expected_plan"], "viewer", db_path=db_path
+            )
+        except TruthUnavailable:
+            unscoped_rows = None
+    governed_count, governed_hash, raw_count, raw_hash, legacy_hash = _capture_hashes(record)
 
     governed_plan = record.get("produced_plan") or {}
     governed_answered = governed_plan.get("tool") != "refuse" and bool(record.get("governed_executed"))
@@ -567,16 +628,25 @@ def score_record(
             if captured_rows_match(
                 governed_rows,
                 expected_rows,
-                row_count=record.get("governed_row_count"),
-                content_hash=record.get("governed_rows_hash"),
+                row_count=governed_count,
+                content_hash=governed_hash,
                 alias_map=aliases,
                 metric=metric,
+                legacy_hash=legacy_hash,
             )
             else "wrong"
         )
     elif expected_refusal and governed_plan.get("tool") != "refuse":
         governed_correctness = "wrong"
-    governed_policy = _policy_matches(record, governed_rows)
+    governed_policy = _policy_matches(
+        record,
+        governed_rows,
+        arm="governed",
+        scoped_rows=expected_rows,
+        unscoped_rows=unscoped_rows,
+        metric=metric,
+        aliases=aliases,
+    )
     governed_evidence = (
         "complete" if expected_metric and _has_required_evidence(record, metric) else "incomplete"
         if expected_metric else "n/a"
@@ -595,16 +665,25 @@ def score_record(
             if captured_rows_match(
                 raw_rows,
                 expected_rows,
-                row_count=raw.get("row_count", record.get("ungoverned_row_count")),
-                content_hash=raw.get("rows_hash", record.get("ungoverned_rows_hash")),
+                row_count=raw_count,
+                content_hash=raw_hash,
                 alias_map=aliases,
                 metric=metric,
+                legacy_hash=legacy_hash,
             )
             else "wrong"
         )
     elif expected_refusal and raw_answered:
         raw_correctness = "wrong"
-    raw_policy = _policy_matches(record, raw_rows)
+    raw_policy = _policy_matches(
+        record,
+        raw_rows,
+        arm="ungoverned",
+        scoped_rows=expected_rows,
+        unscoped_rows=unscoped_rows,
+        metric=metric,
+        aliases=aliases,
+    )
     raw_evidence = "incomplete" if expected_metric and raw_answered else "n/a"
 
     return {
@@ -670,6 +749,7 @@ def _iter_capture_records(
 ) -> Iterator[tuple[str, dict[str, Any]]]:
     """Yield case records one JSONL line at a time without loading a capture."""
     declared_dataset: str | None = None
+    manifest: dict[str, Any] | None = None
     for path in paths:
         with Path(path).open(encoding="utf-8") as capture_file:
             for line in capture_file:
@@ -685,10 +765,11 @@ def _iter_capture_records(
                             "Offline scoring requires capture files for exactly one declared dataset."
                         )
                     declared_dataset = dataset
+                    manifest = item
                 elif item.get("record_type") == "case":
                     if declared_dataset is None:
                         raise ValueError("Capture manifest must precede case records.")
-                    yield declared_dataset, item
+                    yield declared_dataset, {"_capture_manifest": manifest, **item}
     if declared_dataset is None:
         raise ValueError("Offline scoring requires capture files for exactly one declared dataset.")
 
@@ -698,13 +779,16 @@ def _compact_scored_sample(sample: dict[str, Any]) -> dict[str, Any]:
     expected_rows = sample.pop("expected_rows", None)
     if expected_rows is not None:
         sample["expected_row_count"] = len(expected_rows)
-        sample["expected_rows_hash"] = rows_content_hash(expected_rows)
+        metric = sample.get("expected_plan", {}).get("args", {}).get("metric")
+        sample["expected_rows_hash"] = rows_content_hash(
+            expected_rows, metric=metric if isinstance(metric, str) else None
+        )
         sample["expected_rows_preview"] = expected_rows[:50]
     return sample
 
 
 def evaluator_self_test() -> dict[str, bool]:
-    """Prove that five known evaluator failures are observable before scoring."""
+    """Prove that seeded answer, evidence, and policy failures are observable."""
     base = {
         "dataset": "fixture",
         "case_id": "self-test",
@@ -734,12 +818,18 @@ def evaluator_self_test() -> dict[str, bool]:
     }
     duplicate = {**base, "governed_rows": [{"revenue": 1185.0}, {"revenue": 1185.0}]}
     missing_evidence = {**base, "evidence": None}
+    scoped_plan = {
+        "tool": "query_metric",
+        "args": {"metric": "revenue", "dimensions": [], "filters": {"order_month": "last_month"}},
+    }
+    unscoped_rows = independent_rows("fixture", scoped_plan, "viewer")
     forbidden_scope = {
         **base,
         "role": "eu_analyst",
-        "governed_rows": [{"category": "Electronics", "revenue": 500.0}, {"category": "Books", "revenue": 280.0}],
-        "expected_plan": {"tool": "query_metric", "args": {"metric": "revenue", "dimensions": ["category"], "filters": {"order_month": "last_month"}}},
-        "produced_plan": {"tool": "query_metric", "args": {"metric": "revenue", "dimensions": ["category"], "filters": {"order_month": "last_month"}}},
+        "governed_rows": unscoped_rows,
+        "policy_decisions": [{"rule": "row_filter", "decision": "allow"}],
+        "expected_plan": scoped_plan,
+        "produced_plan": scoped_plan,
     }
     return {
         "wrong_metric": score_record(wrong_metric, dataset="fixture")["governed"]["answer_correctness"] == "wrong",

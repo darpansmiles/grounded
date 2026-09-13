@@ -259,7 +259,8 @@ def test_capture_path_persists_executed_governed_and_ungoverned_records(tmp_path
 
     records = [json.loads(line) for line in capture_path.read_text(encoding="utf-8").splitlines()]
     assert records[0]["record_type"] == "manifest"
-    assert records[0]["schema_version"] == 2
+    assert records[0]["schema_version"] == 3
+    assert records[0]["row_hash_normalization"] == "declared_metric_two_decimal_v1"
     by_case = {record["case_id"]: record for record in records[1:]}
     metric = by_case["metric"]
     assert metric["governed_executed"] is True
@@ -296,7 +297,7 @@ def test_capture_writer_bounds_large_rows_but_retains_count_and_full_content_has
     writer.write(record)
 
     persisted = [json.loads(line) for line in capture_path.open(encoding="utf-8")][1]
-    expected_hash = rows_content_hash(rows, alias_map={})
+    expected_hash = rows_content_hash(rows, alias_map={}, metric="revenue")
     assert persisted["governed_rows"] == rows[:CAPTURE_ROW_PREVIEW_LIMIT]
     assert persisted["governed_row_count"] == len(rows)
     assert persisted["governed_rows_hash"] == expected_hash

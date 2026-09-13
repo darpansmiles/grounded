@@ -86,4 +86,14 @@ The benchmark uses locally available Ollama models and can take a long time. It 
 make benchmark DATASET=tpch
 ```
 
-For a full local queue, run `make benchmark-all`. Models run one at a time on a 16 GB machine; request concurrency within a loaded model can be tuned with `OLLAMA_NUM_PARALLEL`. Versioned result cards are written under `evals/results/`.
+This command first captures each model's produced governed call and raw-SQL
+control attempt, then scores the capture offline against independently computed
+truth. The four-dimension report is written to
+`.grounded/scores/tpch-benchmark.json`; its corresponding capture is written to
+`.grounded/captures/tpch-benchmark.jsonl`. Models run one at a time on a 16 GB
+machine; request concurrency within a loaded model can be tuned with
+OLLAMA_NUM_PARALLEL.
+
+For a full local queue, run `make benchmark-all`. It uses the same
+capture-then-score workflow for each available pack. The routing-only in-run
+table is not answer-quality evidence.

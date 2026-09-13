@@ -54,7 +54,7 @@ def test_capture_analysis_detects_a_documented_alias_comparison_artifact(tmp_pat
 
     assert (
         classify_ungoverned_record(alias, dataset="fixture", db_path=database)
-        == "alias_mismatch"
+        == "correct_but_rounding_or_shape"
     )
 
 
@@ -87,3 +87,30 @@ def test_capture_analysis_streams_jsonl_and_reports_review_only_buckets(tmp_path
     assert report["classification"] == "post_collection_diagnostic_not_a_benchmark_score"
     assert report["counts"] == {"fenced_rejection": 1}
     assert report["samples"][0]["case_id"] == "revenue-total"
+
+
+def test_capture_analysis_diagnoses_executed_wrong_sql_with_expected_actual_detail(tmp_path):
+    database = tmp_path / "fixture.duckdb"
+    seed_database(str(database))
+    wrong = _record(
+        raw_sql="SELECT SUM(line_revenue) AS revenue FROM mart_revenue",
+        rows=[{"revenue": 1635.0}],
+        error=None,
+        failure_reason=None,
+    )
+    capture = tmp_path / "capture.jsonl"
+    capture.write_text(
+        "\n".join(
+            [
+                json.dumps({"record_type": "manifest", "dataset": "fixture"}),
+                json.dumps(wrong),
+            ]
+        ) + "\n",
+        encoding="utf-8",
+    )
+
+    report = analyze_capture(capture, db_path=database)
+
+    assert report["counts"] == {"wrong_business_definition_filter_period": 1}
+    assert report["samples"][0]["sql"]
+    assert report["samples"][0]["mismatch"]["expected_preview"] == [{"revenue": 1185}]

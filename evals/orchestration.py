@@ -73,15 +73,37 @@ def _run_dataset(dataset: str) -> list[str]:
         if pack.semantics and pack.semantics.backend == "cube":
             subprocess.run(["make", "cube-up", f"DATASET={dataset}"], check=True)
         subprocess.run(["make", "preflight-benchmark", f"DATASET={dataset}"], check=True)
-        results_dir = Path("evals/results")
-        before = set(results_dir.glob(f"benchmark-{dataset}-*.json"))
+        capture_path = Path(".grounded/captures") / f"{dataset}-benchmark-all.jsonl"
+        score_path = Path(".grounded/scores") / f"{dataset}-benchmark-all.json"
         completed = subprocess.run(
-            [sys.executable, "-m", "evals.compare", "--dataset", dataset],
+            [
+                sys.executable,
+                "-m",
+                "evals.benchmark",
+                "--dataset",
+                dataset,
+                "--capture-path",
+                str(capture_path),
+            ],
             check=False,
         )
         if completed.returncode:
-            raise RuntimeError(f"benchmark command exited {completed.returncode}")
-        return [str(path) for path in sorted(set(results_dir.glob(f"benchmark-{dataset}-*.json")) - before)]
+            raise RuntimeError(f"benchmark collection exited {completed.returncode}")
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "evals.compare",
+                "--capture-path",
+                str(capture_path),
+                "--offline-output",
+                str(score_path),
+            ],
+            check=False,
+        )
+        if completed.returncode:
+            raise RuntimeError(f"offline scoring exited {completed.returncode}")
+        return [str(score_path)]
     finally:
         subprocess.run(["make", "down", f"DATASET={dataset}"], check=False)
 

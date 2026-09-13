@@ -36,7 +36,6 @@ from evals.stats import bootstrap_rate_ci, mcnemar_exact, run_variance
 from governed.service import governed_query
 from models.provider import LLMProvider, OllamaProvider, ProviderUnavailable
 from packlib import Pack, load_pack
-from resolver.backends.cube import CubeResponseError
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RAW_EXEMPLARS_PER_BUCKET = 5
@@ -681,7 +680,7 @@ def write_model_card(
 
 
 @_with_active_pack
-def run_comparison(
+def _retired_run_comparison(
     models: list[str] | None = None,
     runs: int = 3,
     golden: str | Path | None = None,
@@ -699,7 +698,7 @@ def run_comparison(
     resource_sampler_factory: Callable[[], Any] | None = None,
     concurrency: int | None = None,
 ) -> dict[str, Any]:
-    """Run governed routing and raw-SQL control arms, then persist their delta card."""
+    """Legacy constructed scorer retained only while its helpers are retired."""
     pack = _activate_pack(dataset)
     golden_path = Path(golden) if golden is not None else pack.golden
     db_path = db_path or str(pack.destination.path)
@@ -889,6 +888,21 @@ def run_comparison(
     return card
 
 
+def run_comparison(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    """Reject the retired live answer-quality scorer.
+
+    Collection must execute the model-produced calls first, then offline scoring
+    compares those captured results with independent truth.  Keeping this guard
+    public makes accidental callers fail loudly instead of emitting constructed
+    answer-quality claims.
+    """
+    raise RuntimeError(
+        "run_comparison is retired. Collect with python -m evals.benchmark "
+        "--capture-path <capture.jsonl> and score with python -m evals.compare "
+        "--capture-path <capture.jsonl> --offline-output <score.json>."
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI without exposing routine local-service tracebacks."""
     parser = argparse.ArgumentParser(
@@ -945,32 +959,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Offline scoring failed: {exc}", file=sys.stderr)
             return 1
         return 0
-    models = arguments.models.split(",") if arguments.models else None
-    failure: Exception | None = None
-    try:
-        run_comparison(
-            dataset=arguments.dataset,
-            models=models,
-            model_timeout_seconds=arguments.model_timeout,
-            concurrency=arguments.concurrency,
-        )
-    except CubeResponseError as exc:
-        failure = exc
-        message = str(exc)
-    except (duckdb.Error, FileNotFoundError) as exc:
-        failure = exc
-        message = (
-            f"Dataset {arguments.dataset!r} is not ready for benchmarking. "
-            f"Run `make spine DATASET={arguments.dataset}` and retry."
-        )
-    except ProviderUnavailable as exc:
-        failure = exc
-        message = f"Ollama is unavailable for benchmarking: {exc}. Run `ollama list` and pull the configured models."
-    else:
-        return 0
-    print(message, file=sys.stderr)
-    if os.environ.get("GROUNDED_DEBUG"):
-        raise failure
+    print(
+        "Live comparison is retired. Collect with python -m evals.benchmark "
+        "--dataset <pack> --capture-path <capture.jsonl>, then score with "
+        "python -m evals.compare --capture-path <capture.jsonl> "
+        "--offline-output <score.json>.",
+        file=sys.stderr,
+    )
     return 2
 
 

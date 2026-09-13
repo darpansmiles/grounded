@@ -41,19 +41,19 @@ The tables below are in-catalog results from three runs across all five packs an
 
 | Model | Governed correct / answered | Governed wrong / in-catalog | Ungoverned correct / answered | Ungoverned wrong / in-catalog |
 | --- | ---: | ---: | ---: | ---: |
-| phi4 | 198 / 210 (94.3%) | 12 / 213 (5.6%) | 21 / 213 (9.9%) | 192 / 213 (90.1%) |
-| qwen2.5:14b | 195 / 213 (91.5%) | 18 / 213 (8.5%) | 15 / 213 (7.0%) | 198 / 213 (93.0%) |
-| gemma2:9b | 171 / 189 (90.5%) | 18 / 213 (8.5%) | 12 / 213 (5.6%) | 201 / 213 (94.4%) |
-| llama3.1:8b | 186 / 213 (87.3%) | 27 / 213 (12.7%) | 0 / 210 (0.0%) | 210 / 213 (98.6%) |
-| qwen2.5:7b | 168 / 213 (78.9%) | 45 / 213 (21.1%) | 9 / 201 (4.5%) | 192 / 213 (90.1%) |
-| phi3.5 | 105 / 183 (57.4%) | 78 / 213 (36.6%) | 0 / 141 (0.0%) | 141 / 213 (66.2%) |
-| llama3.2:3b | 117 / 186 (62.9%) | 69 / 213 (32.4%) | 0 / 129 (0.0%) | 129 / 213 (60.6%) |
-| mistral:7b | 123 / 210 (58.6%) | 87 / 213 (40.8%) | 0 / 102 (0.0%) | 102 / 213 (47.9%) |
-| qwen2.5:3b | 0 / 33 (0.0%) | 33 / 213 (15.5%) | 0 / 114 (0.0%) | 114 / 213 (53.5%) |
+| phi4 | 198 / 210 (94.3%) | 12 / 213 (5.6%) | 48 / 213 (22.5%) | 165 / 213 (77.5%) |
+| qwen2.5:14b | 195 / 213 (91.5%) | 18 / 213 (8.5%) | 33 / 213 (15.5%) | 180 / 213 (84.5%) |
+| gemma2:9b | 171 / 189 (90.5%) | 18 / 213 (8.5%) | 30 / 213 (14.1%) | 183 / 213 (85.9%) |
+| llama3.1:8b | 186 / 213 (87.3%) | 27 / 213 (12.7%) | 12 / 210 (5.7%) | 198 / 213 (93.0%) |
+| qwen2.5:7b | 168 / 213 (78.9%) | 45 / 213 (21.1%) | 36 / 201 (17.9%) | 165 / 213 (77.5%) |
+| phi3.5 | 105 / 183 (57.4%) | 78 / 213 (36.6%) | 21 / 141 (14.9%) | 120 / 213 (56.3%) |
+| llama3.2:3b | 117 / 186 (62.9%) | 69 / 213 (32.4%) | 6 / 129 (4.7%) | 123 / 213 (57.7%) |
+| mistral:7b | 123 / 210 (58.6%) | 87 / 213 (40.8%) | 12 / 102 (11.8%) | 90 / 213 (42.3%) |
+| qwen2.5:3b | 0 / 33 (0.0%) | 33 / 213 (15.5%) | 24 / 114 (21.1%) | 90 / 213 (42.3%) |
 
 AdventureWorks makes the important point plainly: the governed result is not perfect. Stronger models have single-digit wrong-answer rates, while weaker models can be much less useful. The structural boundary prevents free-form SQL, but it does not prevent a model from selecting the wrong declared metric, period, dimension, or scope.
 
-The raw-SQL diagnostic found 19 alias-mismatch cases among 250 AdventureWorks failures. That is a real caveat. Some raw answers may be value-correct but differently shaped, so the raw-SQL gap is not presented as if every failure were equally diagnostic. The remaining failures were predominantly genuine schema or execution failures.
+The raw-SQL arm is scored fairly: the same two-decimal rounding applied to the governed arm is applied to raw results before comparison, so a value that is correct but differently rounded is not counted as wrong. Under that symmetric comparison, raw-SQL correctness on AdventureWorks is not near-zero — it reaches roughly 6–22% depending on the model. The gap to the governed arm is therefore reported against a raw baseline given full rounding credit, not an inflated one. The remaining raw failures are genuine: wrong metric definitions, incorrect aggregations and joins, and references to schema that does not exist.
 
 ### TPC-H
 
@@ -69,7 +69,7 @@ The raw-SQL diagnostic found 19 alias-mismatch cases among 250 AdventureWorks fa
 | mistral:7b | 108 / 216 (50.0%) | 108 / 228 (47.4%) | 0 / 213 (0.0%) | 213 / 228 (93.4%) |
 | qwen2.5:3b | 12 / 114 (10.5%) | 102 / 228 (44.7%) | 0 / 120 (0.0%) | 120 / 228 (52.6%) |
 
-TPC-H exposes why a raw-SQL comparison must be diagnosed, not merely counted. Some ungoverned failures are genuine schema hallucination: the models frequently reference classic TPC-H fields such as `part_type`, `part_brand`, and `market_segment` that were dimensionalized away in the gold star schema. But many raw queries executed and returned wrong values for reasons the current diagnostic does not yet classify (it flags execution errors and alias mismatches, not executed-but-wrong values), and the numeric comparison is still being audited for rounding and output-shape fairness. The raw arm's near-zero correctness on TPC-H is a strong signal in this tested comparison, but the precise composition of its failures, and whether any of it is a scoring artifact, is still under analysis.
+TPC-H exposes why a raw-SQL comparison must be diagnosed, not merely counted. The raw arm scored 0% correct on TPC-H for every model, and the diagnostic now classifies why, rather than assuming it. Some failures are schema hallucination: the models frequently reference classic TPC-H fields such as `part_type`, `part_brand`, and `market_segment` that were dimensionalized away in the gold star schema. The rest are executed-but-wrong answers — queries that ran and returned the wrong number. A sample of executed raw cases bucketed into incorrect aggregations and joins and wrong business definitions; for example, `SUM(extended_price)` returned 110,927,736,019.61 where the independently computed revenue was 50,992,515,249.66, and a `COUNT(order_key)` over the fact table returned 2,999,671 rather than 364,780 orders. Because raw values are rounded the same way as the governed arm before comparison, this 0% is not a rounding artifact; it is genuine computational error on a schema the model did not understand.
 
 ### Spider world_1
 
@@ -102,11 +102,12 @@ TPC-H exposes why a raw-SQL comparison must be diagnosed, not merely counted. So
 ### Fixture
 
 The fixture is a tiny deterministic pack with 30 in-catalog cases per model,
-so its rates are noisy and do not carry the thesis. Governed correctness among
-models that returned an answer ranged from 0.0% (0 / 3, gemma2:9b) to 100.0%
-(9 / 9, qwen2.5:3b); governed wrong-answer rates ranged from 0.0% to 30.0%
-(0–9 / 30). The raw-SQL arm had no correct answers in every applicable row. The
-full per-model denominators are in the [benchmark report](benchmarks.md).
+and applicable denominators for some dimensions fall to 3–9 cases, so its rates
+are noisy and do not carry the thesis. Governed correctness among models that
+returned an answer ranged from 80.0% (24 / 30) to 100.0%; governed wrong-answer
+rates ranged from 0.0% to 20.0% (0–6 / 30). The raw-SQL arm was 0% correct for
+every model except qwen2.5:14b (3 / 24, 12.5%). The full per-model denominators
+are in the [benchmark report](benchmarks.md).
 
 ## What the thesis establishes and what it does not
 

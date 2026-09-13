@@ -12,7 +12,6 @@ from evals.compare import (
     write_failure_exemplars,
 )
 from evals.scorecard import render_scorecard
-from models.provider import StubProvider
 from scripts.seed_duckdb import seed_database
 
 _METRIC_CASE = {
@@ -53,55 +52,9 @@ def comparison_inputs(tmp_path, monkeypatch):
     return golden_path, tmp_path / "grounded.duckdb"
 
 
-def test_compare_persists_raw_json_and_percent_markdown_with_auditable_rejections(
-    comparison_inputs, tmp_path, capsys
-):
-    golden_path, db_path = comparison_inputs
-    card = run_comparison(
-        ["stub"],
-        runs=1,
-        golden=golden_path,
-        governed_provider_factory=lambda _model: StubProvider(_GOVERNED),
-        ungoverned_provider_factory=lambda _model: StubProvider(
-            {
-                _METRIC_CASE["question"]: "SELECT 0 AS revenue",
-                _REFUSE_CASE["question"]: "DROP TABLE orders",
-            }
-        ),
-        db_path=str(db_path),
-        output_path=tmp_path / "model_card.json",
-        results_dir=tmp_path / "results",
-    )
-    captured = capsys.readouterr()
-    json_path = next((tmp_path / "results").glob("benchmark-*.json"))
-    markdown_path = next(
-        path
-        for path in (tmp_path / "results").glob("benchmark-*.md")
-        if not path.name.endswith("-failures.md")
-    )
-    failures_path = next((tmp_path / "results").glob("benchmark-*-failures.md"))
-    record = json.loads(json_path.read_text(encoding="utf-8"))
-    markdown = markdown_path.read_text(encoding="utf-8")
-
-    assert set(record["metadata"]) == {
-        "timestamp",
-        "git_sha",
-        "models",
-        "golden_set",
-        "golden_sha",
-        "runs",
-        "ollama_available",
-        "ungoverned_rejection_summary",
-    }
-    assert record["model_card"]["model_cards"]["stub"]["governed"]["hallucination_rate"] == 0.0
-    assert record["metadata"]["ungoverned_rejection_summary"] == {"only one SELECT statement is allowed": 1}
-    assert "| hallucination_rate | 0.0% | 50.0% |" in markdown
-    assert "| answer_correctness_when_answered | 100.0% | 0.0% |" in markdown
-    assert "[comparison start]" in captured.err
-    assert "[benchmark start]" in captured.err
-    assert "[comparison complete]" in captured.err
-    assert card["model_cards"]["stub"]["ungoverned"]["schema_break_rate"] == 0.5
-    assert "## schema_break" in failures_path.read_text(encoding="utf-8")
+def test_compare_rejects_the_retired_constructed_answer_quality_path():
+    with pytest.raises(RuntimeError, match="retired"):
+        run_comparison()
 
 
 def test_percentage_rendering_changes_display_not_scorecard_math():

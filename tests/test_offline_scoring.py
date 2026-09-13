@@ -119,7 +119,7 @@ def test_compact_capture_hash_preserves_full_multiset_comparison():
         preview,
         expected,
         row_count=3,
-        content_hash=rows_content_hash(expected, alias_map=_aliases_for_metric("revenue")),
+        content_hash=rows_content_hash(expected, alias_map=_aliases_for_metric("revenue"), metric="revenue"),
         alias_map=_aliases_for_metric("revenue"),
         metric="revenue",
     )
@@ -127,7 +127,7 @@ def test_compact_capture_hash_preserves_full_multiset_comparison():
         preview,
         expected,
         row_count=2,
-        content_hash=rows_content_hash(expected, alias_map=_aliases_for_metric("revenue")),
+        content_hash=rows_content_hash(expected, alias_map=_aliases_for_metric("revenue"), metric="revenue"),
         alias_map=_aliases_for_metric("revenue"),
         metric="revenue",
     )
@@ -138,7 +138,8 @@ def test_offline_score_uses_compact_capture_metadata_for_both_arms(tmp_path):
     seed_database(str(database))
     record = _metric_record()
     rows = [{"revenue": 1185.0}]
-    row_hash = rows_content_hash(rows, alias_map=_aliases_for_metric("revenue"))
+    row_hash = rows_content_hash(rows, alias_map=_aliases_for_metric("revenue"), metric="revenue")
+    record["_capture_manifest"] = {"schema_version": 3}
     record["governed_rows"] = rows[:1]
     record["governed_row_count"] = len(rows)
     record["governed_rows_hash"] = row_hash
@@ -159,6 +160,51 @@ def test_metric_tolerances_are_declared_per_metric_and_not_a_global_cushion():
     assert _METRIC_TOLERANCES["aov"] == 0
     assert rows_match([{"revenue": 1.00}], [{"revenue": 1}], metric="revenue")
     assert not rows_match([{"revenue": 1.01}], [{"revenue": 1}], metric="revenue")
+
+
+def test_declared_numeric_precision_is_symmetric_for_row_and_hash_comparison():
+    expected = [{"revenue": 123.46}]
+    governed = [{"revenue": 123.456}]
+    raw = [{"total_revenue": 123.456}]
+    aliases = _aliases_for_metric("revenue")
+
+    assert rows_match(governed, expected, metric="revenue")
+    assert rows_match(raw, expected, alias_map=aliases, metric="revenue")
+    expected_hash = rows_content_hash(expected, alias_map=aliases, metric="revenue")
+    assert captured_rows_match(
+        governed, expected, row_count=1, content_hash=rows_content_hash(governed, alias_map=aliases, metric="revenue"), alias_map=aliases, metric="revenue"
+    )
+    assert expected_hash == rows_content_hash(raw, alias_map=aliases, metric="revenue")
+
+
+def test_legacy_compact_hash_keeps_large_exact_results_scoreable():
+    expected = [{"revenue": number} for number in range(51)]
+    legacy_hash = rows_content_hash(expected, alias_map=_aliases_for_metric("revenue"))
+
+    assert captured_rows_match(
+        expected[:50],
+        expected,
+        row_count=51,
+        content_hash=legacy_hash,
+        alias_map=_aliases_for_metric("revenue"),
+        metric="revenue",
+        legacy_hash=True,
+    )
+
+
+def test_legacy_complete_preview_uses_symmetric_numeric_comparison_before_hash():
+    actual = [{"revenue": 123.456}]
+    expected = [{"revenue": 123.46}]
+
+    assert captured_rows_match(
+        actual,
+        expected,
+        row_count=1,
+        content_hash=rows_content_hash(actual, alias_map=_aliases_for_metric("revenue")),
+        alias_map=_aliases_for_metric("revenue"),
+        metric="revenue",
+        legacy_hash=True,
+    )
 
 
 def test_offline_score_uses_symmetric_fenced_sql_extraction(tmp_path):

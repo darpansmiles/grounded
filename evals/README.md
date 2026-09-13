@@ -104,13 +104,10 @@ testing the harness, not for a real-workload claim.
 
 ## Faithfulness judge
 
-The optional LLM-as-judge pass asks a local provider whether every claim and
-number in each governed or ungoverned answer is supported by the same governed
-ground truth. Supply `judge_provider` to `evals.compare.run_comparison` to add
-`faithfulness_rate` to the model card; omitting it leaves all existing
-correctness, routing, refusal, and safety scores unchanged. This judge is most
-useful for interpretive prose and does not replace deterministic row, policy,
-and evidence checks.
+The optional LLM-as-judge pass is retained for interpretive prose only. It is
+not part of the answer-quality score: offline scoring compares executed rows,
+policy scope, and promised evidence deterministically. The retired live
+comparison command cannot create a result card.
 
 Before publishing a judge score, the PM should hand-label a small representative
 sample and report the judge's agreement with that sample. That spot check is a

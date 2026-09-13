@@ -3,6 +3,8 @@ ROOT := $(CURDIR)
 # Every recipe and parse-time package probe receives the project import root.
 export PYTHONPATH := $(ROOT)
 DATASET ?= adventureworks
+BENCHMARK_CAPTURE ?= .grounded/captures/$(DATASET)-benchmark.jsonl
+BENCHMARK_SCORE ?= .grounded/scores/$(DATASET)-benchmark.json
 SOURCE_HOST_PORT ?= 5433
 CUBE_HOST_PORT ?= 4000
 COMPOSE_PROJECT := grounded-$(DATASET)
@@ -34,7 +36,7 @@ endif
 export GROUNDED_PACK_SEMANTICS
 export GROUNDED_PACK_DATABASE
 
-.PHONY: demo test start benchmark benchmark-all lakehouse new-pack validate-pack release-scrub set-secret fetch-source preflight-spine preflight-benchmark source-up source-load source-verify ingest bronze-verify transform cube-up down lineage lineage-view marquez-up benchmark-aw spine spine-all _require-docker _require-postgres _require-cube _require-ollama _require-source-dsn _free-conflicting-cube
+.PHONY: demo test start benchmark benchmark-all cards lakehouse new-pack validate-pack release-scrub set-secret fetch-source preflight-spine preflight-benchmark source-up source-load source-verify ingest bronze-verify transform cube-up down lineage lineage-view marquez-up benchmark-aw spine spine-all _require-docker _require-postgres _require-cube _require-ollama _require-source-dsn _free-conflicting-cube
 
 new-pack:
 	PYTHONPATH=$(ROOT) $(PYTHON) scripts/new_pack.py $(NAME)
@@ -89,10 +91,14 @@ test:
 	$(PYTHON) -m pytest
 
 benchmark: cube-up preflight-benchmark
-	$(PYTHON) -m evals.compare --dataset $(DATASET)
+	$(PYTHON) -m evals.benchmark --dataset $(DATASET) --capture-path $(BENCHMARK_CAPTURE)
+	$(PYTHON) -m evals.compare --capture-path $(BENCHMARK_CAPTURE) --offline-output $(BENCHMARK_SCORE)
 
 benchmark-all:
 	$(PYTHON) -m evals.orchestration
+
+cards:
+	$(PYTHON) -m evals.render_card
 
 lakehouse:
 	PYTHONPATH=$(ROOT) $(PYTHON) scripts/lakehouse.py

@@ -7,7 +7,8 @@ import pytest
 import yaml
 
 from agent.ungoverned import answer_ungoverned
-from evals.compare import render_model_card, run_comparison, ungoverned_correct
+from evals.compare import _retired_run_comparison as run_comparison
+from evals.compare import render_model_card, ungoverned_correct
 from evals.ground_truth import ground_truth_for_case
 from models.provider import ProviderUnavailable, StubProvider
 from scripts.seed_duckdb import seed_database

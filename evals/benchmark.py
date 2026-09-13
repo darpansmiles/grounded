@@ -80,7 +80,14 @@ class CaptureWriter:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = Lock()
         self.path.write_text(
-            _json_line({"record_type": "manifest", "schema_version": 2, **metadata}),
+            _json_line(
+                {
+                    "record_type": "manifest",
+                    "schema_version": 3,
+                    "row_hash_normalization": "declared_metric_two_decimal_v1",
+                    **metadata,
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -112,8 +119,14 @@ def _capture_metric_aliases(record: dict[str, Any]) -> dict[str, str]:
     return _aliases_for_metric(metric) if isinstance(metric, str) else {}
 
 
+def _capture_metric(record: dict[str, Any]) -> str | None:
+    plan = record.get("expected_plan")
+    metric = plan.get("args", {}).get("metric") if isinstance(plan, dict) else None
+    return metric if isinstance(metric, str) else None
+
+
 def _compact_rows(
-    rows: Any, *, aliases: dict[str, str]
+    rows: Any, *, aliases: dict[str, str], metric: str | None
 ) -> tuple[list[dict[str, Any]] | None, int | None, str | None]:
     """Retain a bounded preview and a full-result fingerprint for offline scoring."""
     if not isinstance(rows, list):
@@ -121,7 +134,7 @@ def _compact_rows(
     return (
         rows[:CAPTURE_ROW_PREVIEW_LIMIT],
         len(rows),
-        rows_content_hash(rows, alias_map=aliases),
+        rows_content_hash(rows, alias_map=aliases, metric=metric),
     )
 
 
@@ -129,9 +142,10 @@ def _compact_capture_record(record: dict[str, Any]) -> dict[str, Any]:
     """Remove duplicate full results while preserving exact comparison metadata."""
     compact = dict(record)
     aliases = _capture_metric_aliases(record)
+    metric = _capture_metric(record)
 
     governed_rows, governed_count, governed_hash = _compact_rows(
-        compact.get("governed_rows"), aliases=aliases
+        compact.get("governed_rows"), aliases=aliases, metric=metric
     )
     compact["governed_rows"] = governed_rows
     compact["governed_row_count"] = governed_count
@@ -142,7 +156,7 @@ def _compact_capture_record(record: dict[str, Any]) -> dict[str, Any]:
     raw = dict(raw) if isinstance(raw, dict) else None
     raw_rows_source = raw.get("rows") if raw is not None else compact.get("ungoverned_rows")
     ungoverned_rows, ungoverned_count, ungoverned_hash = _compact_rows(
-        raw_rows_source, aliases=aliases
+        raw_rows_source, aliases=aliases, metric=metric
     )
     compact["ungoverned_rows"] = ungoverned_rows
     compact["ungoverned_row_count"] = ungoverned_count
