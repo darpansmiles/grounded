@@ -114,12 +114,17 @@ argument.
   selecting the wrong metric, not only by returning an over-scoped result, and
   the denominators are small. It is not a general authorization-robustness
   claim.
-- **Open validation checks (not yet closed).** (1) For legacy captures whose
-  full result exceeds the stored row preview, the scorer falls back to matching
-  a stored exact hash, which a later rounding-normalized hash cannot reproduce;
-  a large result differing from expected only in precision could still be
-  counted wrong. (2) Card provenance is printed but not yet enforced against the
-  scoring inputs (scoring commit defaults to the render-time checkout; the
-  review JSON is not verified to have come from the hashed capture). Neither is
-  known to affect the published numbers; the point is that the public code alone
-  does not yet prove they do not. Closing both is tracked for a follow-up audit.
+- **Validation checks.** (1) Legacy captures whose full result exceeds the
+  stored row preview are compared by a stored exact hash rather than a
+  rounding-normalized one, so in principle a large result differing from
+  expected only in precision could be miscounted. The raw arm has been audited
+  directly: every raw-SQL attempt (all five packs, including all truncated
+  records) was re-executed to recover its full result and re-scored with the
+  declared normalized comparison, and no label changed. The governed-arm
+  equivalent, which requires re-running the resolver, is being closed by
+  hardening the scorer to recover and normalize full results instead of using
+  the exact-hash fallback. (2) Card provenance is printed but not yet enforced
+  against the scoring inputs (scoring commit defaults to the render-time
+  checkout; the review JSON is not verified to have come from the hashed
+  capture); this is being enforced in the same pass. Neither check has changed a
+  published number.

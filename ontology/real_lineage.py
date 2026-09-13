@@ -53,7 +53,16 @@ def _normalized_ingest_event(raw_event: dict[str, Any]) -> dict[str, Any]:
 
 
 def ingest_events(path: str | Path = DEFAULT_INGEST_LINEAGE_PATH) -> list[dict[str, Any]]:
-    """Read and normalize every producer-emitted ingestion JSONL event."""
+    """Read and normalize every producer-emitted ingestion JSONL event.
+
+    The active pack directory is the pack identity.  Ingestion preserves the
+    producer's source-engine namespace rather than trying to infer a pack name
+    from it: dlt/PostgreSQL jobs use ``<pack>.dlt`` with
+    ``<pack>.postgres`` inputs, while SQLite jobs and inputs use
+    ``<pack>.sqlite``.  Both write ``<pack>.bronze`` outputs.  Consumers must
+    therefore resolve the pack from the selected pack, never by stripping a
+    ``.dlt`` suffix from an OpenLineage namespace.
+    """
     event_path = Path(path)
     if not event_path.is_file():
         raise FileNotFoundError(f"dlt lineage JSONL was not found: {event_path}")

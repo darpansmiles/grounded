@@ -9,25 +9,37 @@ from ontology import real_lineage
 from packlib import load_pack
 
 _ROOT = Path(__file__).resolve().parents[1]
-pytestmark = pytest.mark.skipif(
-    not (_ROOT / real_lineage.DEFAULT_INGEST_LINEAGE_PATH).is_file(),
-    reason="real-lineage tests require the local Slice 029 dlt JSONL artifact",
+_FIXTURE_ROOT = _ROOT / "tests" / "fixtures" / "real_lineage"
+
+
+@pytest.mark.parametrize(
+    ("source_engine", "job_engine"),
+    [("postgres", "dlt"), ("sqlite", "sqlite")],
+    ids=["postgres-dlt", "sqlite"],
 )
+def test_ingest_events_are_normalized_from_the_producer_jsonl(
+    monkeypatch, source_engine, job_engine
+):
+    fixture_path = _FIXTURE_ROOT / (
+        "adventureworks" if source_engine == "postgres" else "bird_ca_schools"
+    ) / "ingest.jsonl"
+    # A namespace identifies an engine, not a pack. The fixture directory is
+    # intentionally the source of the pack identity for this regression test.
+    pack_name = fixture_path.parent.name
+    pack = load_pack(pack_name)
+    monkeypatch.setenv("GROUNDED_PACK", pack_name)
 
-
-def test_ingest_events_are_normalized_from_the_producer_jsonl():
     raw_events = [
         json.loads(line)
-        for line in (_ROOT / real_lineage.DEFAULT_INGEST_LINEAGE_PATH)
-        .read_text(encoding="utf-8")
+        for line in fixture_path.read_text(encoding="utf-8")
         .splitlines()
     ]
-    events = real_lineage.ingest_events(_ROOT / real_lineage.DEFAULT_INGEST_LINEAGE_PATH)
-    pack_name = raw_events[0]["job"]["namespace"].removesuffix(".dlt")
+    events = real_lineage.ingest_events(fixture_path)
 
+    assert pack.name == pack_name
     assert [event["job"]["namespace"] for event in raw_events] == [
-        f"{pack_name}.dlt",
-        f"{pack_name}.dlt",
+        f"{pack.namespace}.{job_engine}",
+        f"{pack.namespace}.{job_engine}",
     ]
     raw_inputs = {
         (dataset["namespace"], dataset["name"]): dataset
@@ -39,22 +51,26 @@ def test_ingest_events_are_normalized_from_the_producer_jsonl():
     }
     assert raw_inputs
     assert raw_outputs
-    assert all(namespace == f"{pack_name}.postgres" for namespace, _ in raw_inputs)
-    assert all(namespace == f"{pack_name}.bronze" for namespace, _ in raw_outputs)
+    assert all(namespace == f"{pack.namespace}.{source_engine}" for namespace, _ in raw_inputs)
+    assert all(namespace == f"{pack.namespace}.bronze" for namespace, _ in raw_outputs)
     assert all(output["facets"]["schema"]["fields"] for output in raw_outputs.values())
     assert all(
         output["facets"]["dataQualityMetrics"]["rowCount"] > 0
         for output in raw_outputs.values()
     )
     assert [event["eventType"] for event in events] == ["START", "COMPLETE"]
+    assert [event["job"]["namespace"] for event in events] == [
+        f"{pack.namespace}.{job_engine}",
+        f"{pack.namespace}.{job_engine}",
+    ]
     assert all(
-        dataset["namespace"] == f"{pack_name}.postgres"
-        and "." in dataset["name"]
+        dataset["namespace"] == f"{pack.namespace}.{source_engine}"
+        and dataset["name"]
         for event in events
         for dataset in event["inputs"]
     )
     assert all(
-        dataset["namespace"] == f"{pack_name}.bronze"
+        dataset["namespace"] == f"{pack.namespace}.bronze"
         for dataset in events[-1]["outputs"]
     )
 
@@ -67,16 +83,17 @@ def test_real_lineage_emits_dlt_and_sqlmesh_events_to_marquez(monkeypatch):
         return True
 
     monkeypatch.setattr(real_lineage, "emit_events", capture_events)
-    raw_event = json.loads(
-        (_ROOT / real_lineage.DEFAULT_INGEST_LINEAGE_PATH).read_text(encoding="utf-8").splitlines()[0]
-    )
-    pack_name = raw_event["job"]["namespace"].removesuffix(".dlt")
+    fixture_path = _FIXTURE_ROOT / "adventureworks" / "ingest.jsonl"
+    # Keep this integration-shaped test on the PostgreSQL pack because it also
+    # owns a SQLMesh project. The SQLite regression is covered above without
+    # requiring a transform that its pack intentionally does not declare.
+    pack_name = fixture_path.parent.name
     pack = load_pack(pack_name)
     assert pack.transform_dir is not None
     monkeypatch.setenv("GROUNDED_PACK", pack_name)
     try:
         result = real_lineage.emit_real_lineage(
-            ingest_path=_ROOT / real_lineage.DEFAULT_INGEST_LINEAGE_PATH,
+            ingest_path=fixture_path,
             transform_path=pack.transform_dir,
         )
     except PermissionError as exc:

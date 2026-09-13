@@ -47,3 +47,6 @@ audit.log.jsonl
 .grounded/
 grounded_graph/
 *_graph/
+
+# One-off PM audit tooling, not part of the product
+reexec_audit_069.py
