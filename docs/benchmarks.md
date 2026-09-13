@@ -123,7 +123,10 @@ argument.
   recover its full result and re-scored with the declared normalized comparison.
   No label changed in either arm. The scorer now recovers and normalizes full
   results instead of using the exact-hash fallback, so the gap cannot recur.
-  (2) Card provenance is printed but not yet enforced against the scoring inputs
-  (scoring commit defaults to the render-time checkout; the review JSON is not
-  verified to have come from the hashed capture); this is being enforced next.
-  Neither check changed a published number.
+  (2) *Closed.* Card provenance is now bound to the scoring inputs: each review
+  records the capture SHA-256, the scoring commit, the dataset identity, and a
+  full model-case-run inventory, and the card renderer re-verifies the capture
+  hash, dataset identity, and run inventory and refuses to emit a card on any
+  mismatch, incomplete run set, or invalid record. The scoring commit and the
+  render-time commit are shown separately. Neither check changed a published
+  number.
