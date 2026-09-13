@@ -207,6 +207,72 @@ def test_legacy_complete_preview_uses_symmetric_numeric_comparison_before_hash()
     )
 
 
+def test_legacy_truncated_governed_rows_use_the_opt_in_full_recovery(tmp_path, monkeypatch):
+    database = tmp_path / "fixture.duckdb"
+    seed_database(str(database))
+    expected = [{"revenue": 123.46} for _ in range(51)]
+    captured = [{"revenue": 123.456} for _ in range(51)]
+    record = _metric_record()
+    record["_capture_manifest"] = {"schema_version": 2}
+    record["governed_rows"] = captured[:50]
+    record["governed_row_count"] = len(captured)
+    record["governed_rows_hash"] = rows_content_hash(captured)
+    monkeypatch.setattr(
+        offline_scoring, "independent_rows", lambda *_args, **_kwargs: expected
+    )
+
+    recovered: list[dict] = []
+
+    def recover(candidate, dataset, db_path):
+        recovered.append(
+            {"dataset": dataset, "db_path": db_path, "case_id": candidate["case_id"]}
+        )
+        return expected
+
+    old = score_record(record, dataset="fixture", db_path=database)
+    replayed = score_record(
+        record,
+        dataset="fixture",
+        db_path=database,
+        governed_rows_recoverer=recover,
+    )
+
+    assert old["governed"]["answer_correctness"] == "wrong"
+    assert replayed["governed"]["answer_correctness"] == "correct"
+    assert replayed["governed_recovery"] == {
+        "attempted": True,
+        "reexec_error": None,
+        "full_row_count": 51,
+    }
+    assert recovered == [
+        {"dataset": "fixture", "db_path": database, "case_id": "rev-total-lastmonth"}
+    ]
+
+
+def test_governed_recovery_does_not_run_for_a_complete_legacy_preview(tmp_path):
+    database = tmp_path / "fixture.duckdb"
+    seed_database(str(database))
+    record = _metric_record()
+    record["_capture_manifest"] = {"schema_version": 2}
+    record["governed_row_count"] = 1
+
+    def fail_if_called(*_args):
+        pytest.fail("complete rows must not be replayed")
+
+    sample = score_record(
+        record,
+        dataset="fixture",
+        db_path=database,
+        governed_rows_recoverer=fail_if_called,
+    )
+
+    assert sample["governed_recovery"] == {
+        "attempted": False,
+        "reexec_error": None,
+        "full_row_count": None,
+    }
+
+
 def test_offline_score_uses_symmetric_fenced_sql_extraction(tmp_path):
     database = tmp_path / "fixture.duckdb"
     seed_database(str(database))

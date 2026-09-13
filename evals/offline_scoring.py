@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter, defaultdict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -26,6 +26,11 @@ from agent.ungoverned import extract_sql, is_single_select
 
 class TruthUnavailable(RuntimeError):
     """Raised when a capture cannot be checked against an independent truth."""
+
+
+GovernedRowsRecoverer = Callable[
+    [dict[str, Any], str, str | Path | None], list[dict[str, Any]]
+]
 
 
 @dataclass(frozen=True)
@@ -591,7 +596,11 @@ def _answer_label(expected_refusal: bool, answered: bool, correctness: str) -> s
 
 
 def score_record(
-    record: dict[str, Any], *, dataset: str, db_path: str | Path | None = None
+    record: dict[str, Any],
+    *,
+    dataset: str,
+    db_path: str | Path | None = None,
+    governed_rows_recoverer: GovernedRowsRecoverer | None = None,
 ) -> dict[str, Any]:
     """Score captured governed and raw attempts without model or resolver calls."""
     record = {**record, "dataset": dataset}
@@ -621,6 +630,25 @@ def score_record(
     governed_plan = record.get("produced_plan") or {}
     governed_answered = governed_plan.get("tool") != "refuse" and bool(record.get("governed_executed"))
     governed_rows = record.get("governed_rows")
+    governed_recovery = {
+        "attempted": False,
+        "reexec_error": None,
+        "full_row_count": None,
+    }
+    if governed_rows_recoverer is not None and _needs_governed_row_recovery(
+        record, legacy_hash=legacy_hash
+    ):
+        governed_recovery["attempted"] = True
+        try:
+            governed_rows = governed_rows_recoverer(record, dataset, db_path)
+            governed_recovery["full_row_count"] = len(governed_rows)
+            # Use the regular normalized multiset comparison for recovered
+            # complete rows. The legacy exact fingerprint must not participate.
+            governed_count = None
+            governed_hash = None
+            legacy_hash = False
+        except Exception as exc:  # noqa: BLE001 - surface a replay failure, never invent rows.
+            governed_recovery["reexec_error"] = f"{type(exc).__name__}: {exc}"
     governed_correctness = "n/a"
     if expected_metric and governed_answered and expected_rows is not None:
         governed_correctness = (
@@ -702,6 +730,7 @@ def score_record(
             "summary_label": _answer_label(expected_refusal, governed_answered, governed_correctness),
             "schema_break": "n/a",
         },
+        "governed_recovery": governed_recovery,
         "ungoverned": {
             "answer_correctness": raw_correctness,
             "interface_compliance": "compliant" if raw_refusal or is_single_select(raw_sql) else "noncompliant",
@@ -711,6 +740,22 @@ def score_record(
             "schema_break": "n/a" if raw_refusal else bool(raw.get("schema_break", raw_rows is None)),
         },
     }
+
+
+def _needs_governed_row_recovery(record: dict[str, Any], *, legacy_hash: bool) -> bool:
+    """Identify exactly the large legacy governed results needing full replay."""
+    rows = record.get("governed_rows")
+    row_count = record.get("governed_row_count")
+    plan = record.get("produced_plan")
+    return (
+        legacy_hash
+        and isinstance(rows, list)
+        and isinstance(row_count, int)
+        and row_count > len(rows)
+        and record.get("governed_executed") is True
+        and isinstance(plan, dict)
+        and plan.get("tool") != "refuse"
+    )
 
 
 def _rate(matches: list[bool]) -> dict[str, int | float | None]:
@@ -841,7 +886,10 @@ def evaluator_self_test() -> dict[str, bool]:
 
 
 def score_capture_files(
-    paths: list[str | Path], *, db_path: str | Path | None = None
+    paths: list[str | Path],
+    *,
+    db_path: str | Path | None = None,
+    governed_rows_recoverer: GovernedRowsRecoverer | None = None,
 ) -> dict[str, Any]:
     """Score captured JSONL offline, rejecting output until the evaluator gate passes."""
     gate = evaluator_self_test()
@@ -852,7 +900,12 @@ def score_capture_files(
     for record_dataset, record in _iter_capture_records(paths):
         dataset = record_dataset
         sample = _compact_scored_sample(
-            score_record(record, dataset=record_dataset, db_path=db_path)
+            score_record(
+                record,
+                dataset=record_dataset,
+                db_path=db_path,
+                governed_rows_recoverer=governed_rows_recoverer,
+            )
         )
         grouped[str(sample.get("model"))].append(sample)
     if dataset is None:
@@ -861,10 +914,24 @@ def score_capture_files(
         "dataset": dataset,
         "source": "captured_jsonl",
         "evaluator_self_test": {"passed": True, "checks": gate},
+        "governed_recovery": {
+            "enabled": governed_rows_recoverer is not None,
+            "attempted": sum(
+                sample["governed_recovery"]["attempted"]
+                for model_samples in grouped.values()
+                for sample in model_samples
+            ),
+            "reexec_errors": sum(
+                sample["governed_recovery"]["reexec_error"] is not None
+                for model_samples in grouped.values()
+                for sample in model_samples
+            ),
+        },
         "models": {
             model: {
                 "valid": all(
                     sample["truth_error"] is None
+                    and sample["governed_recovery"]["reexec_error"] is None
                     for sample in model_samples
                     if sample["group"] == "in_catalog"
                 ),

@@ -925,8 +925,20 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         help=(
             "Score an existing capture JSONL offline. Repeat only for captures from "
-            "the same dataset; does not call models or the governed resolver."
+            "the same dataset; does not call models."
         ),
+    )
+    parser.add_argument(
+        "--recover-governed",
+        action="store_true",
+        help=(
+            "Deterministically replay only stored governed plans whose legacy large "
+            "result preview would otherwise require an exact-hash fallback."
+        ),
+    )
+    parser.add_argument(
+        "--cube-url",
+        help="Cube API URL for --recover-governed; defaults to the local resolver URL.",
     )
     parser.add_argument(
         "--truth-db-path",
@@ -939,8 +951,17 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     if arguments.capture_path:
         try:
+            governed_rows_recoverer = None
+            if arguments.recover_governed:
+                from evals.governed_recovery import make_governed_rows_recoverer
+
+                governed_rows_recoverer = make_governed_rows_recoverer(
+                    cube_url=arguments.cube_url
+                )
             report = score_capture_files(
-                arguments.capture_path, db_path=arguments.truth_db_path
+                arguments.capture_path,
+                db_path=arguments.truth_db_path,
+                governed_rows_recoverer=governed_rows_recoverer,
             )
             if arguments.offline_output:
                 write_offline_score(report, arguments.offline_output)
@@ -949,6 +970,7 @@ def main(argv: list[str] | None = None) -> int:
                     {
                         "dataset": report["dataset"],
                         "evaluator_self_test": report["evaluator_self_test"],
+                        "governed_recovery": report["governed_recovery"],
                         "models": sorted(report["models"]),
                     },
                     indent=2,
