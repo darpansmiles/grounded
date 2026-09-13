@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import inspect
 import json
 
@@ -326,6 +327,17 @@ def test_offline_score_streams_jsonl_without_calling_path_read_text(tmp_path, mo
     assert report["dataset"] == "fixture"
     assert report["models"]["stub"]["samples"][0]["expected_row_count"] == 1
     assert "expected_rows" not in report["models"]["stub"]["samples"][0]
+    provenance = report["provenance"]
+    assert provenance["capture_sha256"] == hashlib.sha256(capture.read_bytes()).hexdigest()
+    assert provenance["scoring_commit"]
+    assert provenance["dataset_identity"] == {
+        "name": "fixture",
+        "path": "datasets/fixture",
+        "tree": provenance["dataset_identity"]["tree"],
+    }
+    assert provenance["case_run_inventory"]["models"] == {
+        "stub": {"rev-total-lastmonth": [1]}
+    }
 
 
 def test_offline_score_marks_a_valid_but_wrong_call_wrong_and_missing_evidence_incomplete(

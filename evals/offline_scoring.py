@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -819,6 +820,89 @@ def _iter_capture_records(
         raise ValueError("Offline scoring requires capture files for exactly one declared dataset.")
 
 
+def _sha256_file(path: str | Path) -> str:
+    """Hash a capture incrementally so provenance does not require extra RAM."""
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as capture_file:
+        for chunk in iter(lambda: capture_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _git_revision(*args: str) -> str:
+    """Read an immutable Git identity for a review artifact."""
+    completed = subprocess.run(
+        ["git", "rev-parse", *args], capture_output=True, check=True, text=True
+    )
+    return completed.stdout.strip()
+
+
+def _record_case_run(
+    inventory: dict[str, dict[str, list[int]]], record: dict[str, Any]
+) -> None:
+    """Retain the complete observed case/run matrix needed by the card renderer."""
+    model = record.get("model")
+    case_id = record.get("case_id")
+    run = record.get("run")
+    if not isinstance(model, str) or not isinstance(case_id, str) or not isinstance(run, int):
+        raise TypeError("Each captured case requires string model/case_id and integer run.")
+    inventory.setdefault(model, {}).setdefault(case_id, []).append(run)
+
+
+def _review_provenance(
+    paths: list[str | Path],
+    *,
+    dataset: str,
+    manifest: dict[str, Any],
+    inventory: dict[str, dict[str, list[int]]],
+) -> dict[str, Any]:
+    """Persist the exact inputs and observed run matrix of an offline review."""
+    if len(paths) != 1:
+        raise ValueError("A publishable offline review requires exactly one capture file.")
+    capture_path = Path(paths[0])
+    declared_runs = manifest.get("runs")
+    declared_models = manifest.get("models")
+    if declared_runs is None:
+        declared_runs = max(
+            (run for cases in inventory.values() for runs in cases.values() for run in runs),
+            default=0,
+        )
+    if declared_models is None:
+        declared_models = sorted(inventory)
+    if not isinstance(declared_runs, int) or declared_runs < 1:
+        raise ValueError("Capture manifest requires a positive integer runs value.")
+    if not isinstance(declared_models, list) or not all(
+        isinstance(model, str) for model in declared_models
+    ):
+        raise ValueError("Capture manifest requires a string model roster.")
+    dataset_path = f"datasets/{dataset}"
+    return {
+        "capture_filename": capture_path.name,
+        "capture_sha256": _sha256_file(capture_path),
+        "collection_commit": manifest.get("collection_commit"),
+        "scoring_commit": _git_revision("HEAD"),
+        "dataset_identity": {
+            "name": dataset,
+            "path": dataset_path,
+            "tree": _git_revision(f"HEAD:{dataset_path}"),
+        },
+        "case_run_inventory": {
+            "expected_runs": list(range(1, declared_runs + 1)),
+            "expected_models": sorted(declared_models),
+            "case_ids": sorted(
+                {case_id for cases in inventory.values() for case_id in cases}
+            ),
+            "models": {
+                model: {
+                    case_id: sorted(runs)
+                    for case_id, runs in sorted(case_runs.items())
+                }
+                for model, case_runs in sorted(inventory.items())
+            },
+        },
+    }
+
+
 def _compact_scored_sample(sample: dict[str, Any]) -> dict[str, Any]:
     """Keep review output bounded even when an independent query has many rows."""
     expected_rows = sample.pop("expected_rows", None)
@@ -896,9 +980,19 @@ def score_capture_files(
     if not all(gate.values()):
         raise RuntimeError(f"Evaluator self-test failed: {gate}")
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    inventory: dict[str, dict[str, list[int]]] = {}
     dataset: str | None = None
+    manifest: dict[str, Any] | None = None
     for record_dataset, record in _iter_capture_records(paths):
         dataset = record_dataset
+        captured_manifest = record.get("_capture_manifest")
+        if not isinstance(captured_manifest, dict):
+            raise TypeError("Captured case is missing its manifest.")
+        if manifest is None:
+            manifest = captured_manifest
+        elif manifest != captured_manifest:
+            raise ValueError("Offline scoring requires one consistent capture manifest.")
+        _record_case_run(inventory, record)
         sample = _compact_scored_sample(
             score_record(
                 record,
@@ -908,7 +1002,7 @@ def score_capture_files(
             )
         )
         grouped[str(sample.get("model"))].append(sample)
-    if dataset is None:
+    if dataset is None or manifest is None:
         raise ValueError("Offline scoring requires at least one captured case record.")
     return {
         "dataset": dataset,
@@ -927,6 +1021,9 @@ def score_capture_files(
                 for sample in model_samples
             ),
         },
+        "provenance": _review_provenance(
+            paths, dataset=dataset, manifest=manifest, inventory=inventory
+        ),
         "models": {
             model: {
                 "valid": all(
