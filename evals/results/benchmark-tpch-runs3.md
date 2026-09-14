@@ -5,9 +5,10 @@
 - evaluator self-test: passed
 - method: executed produced governed calls and raw-SQL controls, both compared with independently computed direct-SQL truth
 - scoring commit: `101e056caec9863f9f14016565f1d6982e4fdbfb`
-- rendered at commit: `342a324`
+- rendered at commit: `ebbcf12`
 - capture SHA-256: `d4c7214083533d814bd3520b648bbda62e7548d2a0fc928def8874a8a1166f7c`
 - dataset snapshot: `datasets/tpch` tree `fabff8c205022175d782236415aed1e64a46184c`
+- publication gate: unscorable governed=0, raw=0; recovery errors governed=0, raw=0
 - reproduction: `.venv/bin/python -m evals.benchmark --dataset tpch --runs 3 --capture-path .grounded/captures/tpch-final-r3.jsonl && .venv/bin/python -m evals.compare --capture-path .grounded/captures/tpch-final-r3.jsonl --recover-raw --recover-governed --offline-output .grounded/scores/tpch-final-r3-review.json` (Cube must be running for governed recovery.)
 
 Correct is conditional on answered in-catalog cases. Wrong, interface, and

@@ -5,9 +5,10 @@
 - evaluator self-test: passed
 - method: executed produced governed calls and raw-SQL controls, both compared with independently computed direct-SQL truth
 - scoring commit: `101e056caec9863f9f14016565f1d6982e4fdbfb`
-- rendered at commit: `342a324`
+- rendered at commit: `ebbcf12`
 - capture SHA-256: `5704a2c179f689e377193c13b8aaf1452bea01cbce78e98ae630669e5815348c`
 - dataset snapshot: `datasets/spider_world1` tree `dc34acd23ac8f1e7133348646d4de72e37200bed`
+- publication gate: unscorable governed=0, raw=0; recovery errors governed=0, raw=0
 - reproduction: `.venv/bin/python -m evals.benchmark --dataset spider_world1 --runs 3 --capture-path .grounded/captures/spider-final-r3.jsonl && .venv/bin/python -m evals.compare --capture-path .grounded/captures/spider-final-r3.jsonl --recover-raw --recover-governed --offline-output .grounded/scores/spider-final-r3-review.json` (Cube must be running for governed recovery.)
 
 Correct is conditional on answered in-catalog cases. Wrong, interface, and

@@ -5,9 +5,10 @@
 - evaluator self-test: passed
 - method: executed produced governed calls and raw-SQL controls, both compared with independently computed direct-SQL truth
 - scoring commit: `101e056caec9863f9f14016565f1d6982e4fdbfb`
-- rendered at commit: `342a324`
+- rendered at commit: `ebbcf12`
 - capture SHA-256: `5126f0442794070b995ab018ffb68d28b0763a745750a9d6aa6dd40a89afca16`
 - dataset snapshot: `datasets/adventureworks` tree `153fe7dd502deda4b904e8ed25d4504f3f2ba867`
+- publication gate: unscorable governed=0, raw=0; recovery errors governed=0, raw=0
 - reproduction: `.venv/bin/python -m evals.benchmark --dataset adventureworks --runs 3 --capture-path .grounded/captures/aw-final-r3.jsonl && .venv/bin/python -m evals.compare --capture-path .grounded/captures/aw-final-r3.jsonl --recover-raw --recover-governed --offline-output .grounded/scores/aw-final-r3-review.json` (Cube must be running for governed recovery.)
 
 Correct is conditional on answered in-catalog cases. Wrong, interface, and
