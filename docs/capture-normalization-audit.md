@@ -7,13 +7,15 @@ not an independently reproduced one.
 
 ## Why the audit was run
 
-For results larger than the stored row preview, the offline scorer falls back to a
+For results larger than the stored row preview, the earlier scorer fell back to a
 stored exact hash rather than a rounding-normalized comparison (`captured_rows_match`
-in `evals/offline_scoring.py`). A raw or governed result that differed from the
-expected answer only in decimal precision could, in principle, have been scored wrong
-by that fallback. The audit re-executes every attempt to recover its full result and
-re-scores it with the declared two-decimal normalized comparison, then compares the
-new label to the published one.
+in `evals/offline_scoring.py`; the default path now marks such results unscorable
+instead). A raw or governed result that differed from the expected answer only in
+decimal precision could, in principle, have been scored wrong by that fallback. The
+audit replays the eligible stored raw-SQL attempts and recovers the governed results
+affected by legacy truncation, re-scores them with the declared two-decimal
+normalized comparison, and compares each new label to the published one; replay
+errors are counted and reported separately.
 
 ## Method
 
@@ -70,9 +72,10 @@ the pre-audit scoring.
 
 ## Conclusion and scope
 
-Across both arms, no published label changed under the full-result normalized
-comparison. This confirms the published numbers against the specific precision /
-truncation concern. It does not by itself establish every other aspect of benchmark
+Across both arms, the audit found no correct-to-wrong or wrong-to-correct changes
+among the compared results under the full-result normalized comparison; replay
+errors are reported separately. This confirms the published numbers against the
+specific precision / truncation concern. It does not by itself establish every other aspect of benchmark
 validity, and it is a past-result check. At the time of this audit the default
 comparison could still use the exact-hash fallback; the reject-unscorable hardening
 has since landed, so the default path now marks an unresolved truncated result
