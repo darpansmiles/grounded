@@ -54,8 +54,11 @@ Dataset tree snapshots matched the values recorded on the cards before any repla
 The 975 re-exec errors are stored raw SQL that does not execute against the pinned
 database at all (invented columns such as `line_total`, `category`, `part_type`,
 `extended_price`; MySQL backtick quoting; non-existent functions such as `dateadd`).
-These were already scored wrong and remain wrong; the capable models (phi4,
-qwen2.5:14b) produced zero such errors.
+The script counts these separately and excludes them from the old-vs-new label
+comparison, so this audit does not by itself re-establish their prior labels. They
+are non-executing SQL, so they could not have produced a correct answer in the
+published run either; the capable models (phi4, qwen2.5:14b) produced zero such
+errors.
 
 ## Governed arm result
 
@@ -70,9 +73,12 @@ the pre-audit scoring.
 Across both arms, no published label changed under the full-result normalized
 comparison. This confirms the published numbers against the specific precision /
 truncation concern. It does not by itself establish every other aspect of benchmark
-validity, and it is a past-result check: full-result recovery is currently opt-in, so
-the default comparison can still use the exact-hash fallback until the reject-unscorable
-hardening lands. Root-cause classification of raw failures remains heuristic.
+validity, and it is a past-result check. At the time of this audit the default
+comparison could still use the exact-hash fallback; the reject-unscorable hardening
+has since landed, so the default path now marks an unresolved truncated result
+unscorable (both arms) rather than comparing it by hash, and full-result recovery is
+opt-in (`--recover-raw`, `--recover-governed`). Root-cause classification of raw
+failures remains heuristic.
 
 Revision: audited against the
 reviewed scoring outputs. Reviewed repository snapshot: `3c06624`.

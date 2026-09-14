@@ -118,10 +118,12 @@ argument.
   stored row preview are compared by a stored exact hash rather than a
   rounding-normalized one, so a large result differing from expected only in
   precision could in principle be miscounted. To test whether this affected any
-  published label, I ran a full-result audit: every raw-SQL attempt and every
-  governed call across all five packs (including all truncated records) was
-  re-executed to recover its full result and re-scored with the declared
-  normalized comparison. No label changed in either arm. This is my own audit
+  published label, I ran an audit that replayed the eligible stored raw-SQL
+  attempts and recovered the governed results affected by legacy truncation
+  (780 fallback records: 15 AdventureWorks, 270 TPC-H, 495 BIRD), then re-scored
+  them under the declared normalized comparison. It found no correct-to-wrong or
+  wrong-to-correct changes among the compared results; replay errors are counted
+  and reported separately. This is my own audit
   result, not an independently reproduced one; the audit script
   (`reexec_audit.py`) and a compact summary ([capture-normalization-audit.md](capture-normalization-audit.md))
   are published in the repository so it can be inspected. The default comparison no longer
@@ -135,8 +137,8 @@ argument.
   model-case-run inventory, and the renderer re-verifies the capture hash and
   the observed run inventory (rejecting a hash mismatch, an incomplete run set,
   or an invalid record) and shows the scoring commit and the render-time commit
-  separately. It does not yet independently resolve and compare dataset identity
-  against the scoring revision, reconcile an independently declared expected-case
-  inventory against the scored sample, or check each printed rate against its
-  numerator and denominator; those tighter checks are planned. Neither check has
-  changed a published number.
+  separately. It also resolves the recorded dataset tree at the scoring revision,
+  reconciles an independently declared expected-case inventory (from each pack's
+  `golden.yml`) against the scored sample, and checks each printed rate against
+  its numerator and denominator, refusing to emit a card on any mismatch. Neither
+  check has changed a published number.
