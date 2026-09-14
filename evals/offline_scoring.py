@@ -859,6 +859,37 @@ def _arm_summary(samples: list[dict[str, Any]], arm: str) -> dict[str, Any]:
     }
 
 
+def _publication_issue_counts(samples: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    """Count outcomes that make an offline review unsafe to publish.
+
+    Correctness rates intentionally exclude unresolved legacy previews.  A card
+    must not do the same silently, so an in-catalog unscorable outcome or any
+    stored-plan replay error turns the review into a diagnostic-only artifact.
+    """
+    counts = {
+        "unscorable": {"governed": 0, "ungoverned": 0},
+        "recovery_errors": {"governed": 0, "ungoverned": 0},
+    }
+    for sample in samples:
+        if sample["group"] == "in_catalog":
+            for arm in ("governed", "ungoverned"):
+                counts["unscorable"][arm] += (
+                    sample[arm]["answer_correctness"] == "unscorable"
+                )
+        for arm, recovery_key in (
+            ("governed", "governed_recovery"),
+            ("ungoverned", "raw_recovery"),
+        ):
+            counts["recovery_errors"][arm] += (
+                sample[recovery_key]["reexec_error"] is not None
+            )
+    return counts
+
+
+def _has_publication_issues(counts: dict[str, dict[str, int]]) -> bool:
+    return any(count for category in counts.values() for count in category.values())
+
+
 def _iter_capture_records(
     paths: list[str | Path],
 ) -> Iterator[tuple[str, dict[str, Any]]]:
@@ -1093,6 +1124,36 @@ def score_capture_files(
         grouped[str(sample.get("model"))].append(sample)
     if dataset is None or manifest is None:
         raise ValueError("Offline scoring requires at least one captured case record.")
+    models: dict[str, dict[str, Any]] = {}
+    for model, model_samples in grouped.items():
+        publication_issues = _publication_issue_counts(model_samples)
+        models[model] = {
+            "valid": all(
+                sample["truth_error"] is None
+                and sample["governed_recovery"]["reexec_error"] is None
+                for sample in model_samples
+                if sample["group"] == "in_catalog"
+            )
+            and not _has_publication_issues(publication_issues),
+            "publication_issues": publication_issues,
+            "groups": {
+                group: {
+                    "governed": _arm_summary(
+                        [sample for sample in model_samples if sample["group"] == group],
+                        "governed",
+                    ),
+                    "ungoverned": _arm_summary(
+                        [sample for sample in model_samples if sample["group"] == group],
+                        "ungoverned",
+                    ),
+                }
+                for group in sorted({sample["group"] for sample in model_samples})
+            },
+            "samples": model_samples,
+        }
+    report_issues = _publication_issue_counts(
+        [sample for model_samples in grouped.values() for sample in model_samples]
+    )
     return {
         "dataset": dataset,
         "source": "captured_jsonl",
@@ -1123,28 +1184,15 @@ def score_capture_files(
                 for sample in model_samples
             ),
         },
+        "publication": {
+            "valid": not _has_publication_issues(report_issues),
+            "unscorable_counts": report_issues["unscorable"],
+            "recovery_error_counts": report_issues["recovery_errors"],
+        },
         "provenance": _review_provenance(
             paths, dataset=dataset, manifest=manifest, inventory=inventory
         ),
-        "models": {
-            model: {
-                "valid": all(
-                    sample["truth_error"] is None
-                    and sample["governed_recovery"]["reexec_error"] is None
-                    for sample in model_samples
-                    if sample["group"] == "in_catalog"
-                ),
-                "groups": {
-                    group: {
-                        "governed": _arm_summary([sample for sample in model_samples if sample["group"] == group], "governed"),
-                        "ungoverned": _arm_summary([sample for sample in model_samples if sample["group"] == group], "ungoverned"),
-                    }
-                    for group in sorted({sample["group"] for sample in model_samples})
-                },
-                "samples": model_samples,
-            }
-            for model, model_samples in grouped.items()
-        },
+        "models": models,
     }
 
 

@@ -169,6 +169,47 @@ def _review_sample_inventory(review: dict[str, Any]) -> dict[str, dict[str, list
     }
 
 
+def _publication_issue_counts(review: dict[str, Any]) -> dict[str, dict[str, int]]:
+    """Independently count conditions that make a review unpublishable."""
+    counts = {
+        "unscorable": {"governed": 0, "ungoverned": 0},
+        "recovery_errors": {"governed": 0, "ungoverned": 0},
+    }
+    for model_review in review.get("models", {}).values():
+        if not isinstance(model_review, dict):
+            continue
+        for sample in model_review.get("samples", []):
+            if not isinstance(sample, dict):
+                continue
+            if sample.get("group") == "in_catalog":
+                for arm in ("governed", "ungoverned"):
+                    outcome = sample.get(arm)
+                    if isinstance(outcome, dict) and outcome.get("answer_correctness") == "unscorable":
+                        counts["unscorable"][arm] += 1
+            for arm, recovery_key in (
+                ("governed", "governed_recovery"),
+                ("ungoverned", "raw_recovery"),
+            ):
+                recovery = sample.get(recovery_key)
+                if isinstance(recovery, dict) and recovery.get("reexec_error") is not None:
+                    counts["recovery_errors"][arm] += 1
+    return counts
+
+
+def _reject_publication_issues(counts: dict[str, dict[str, int]]) -> None:
+    if not any(count for category in counts.values() for count in category.values()):
+        return
+    raise ValueError(
+        "Refusing to render unpublishable review: "
+        "unscorable outcomes "
+        f"(governed={counts['unscorable']['governed']}, "
+        f"raw={counts['unscorable']['ungoverned']}); "
+        "recovery errors "
+        f"(governed={counts['recovery_errors']['governed']}, "
+        f"raw={counts['recovery_errors']['ungoverned']})."
+    )
+
+
 def _dataset_tree_at_revision(revision: str, dataset_path: str) -> str:
     completed = subprocess.run(
         ["git", "rev-parse", f"{revision}:{dataset_path}"],
@@ -243,6 +284,7 @@ def _validate_provenance(review: dict[str, Any], capture_path: Path) -> dict[str
         raise ValueError("Capture is missing an expected case or contains an undeclared case.")
     if _review_sample_inventory(review) != model_inventory:
         raise ValueError("Scored samples do not reconcile to the capture inventory.")
+    _reject_publication_issues(_publication_issue_counts(review))
     for model in expected_models:
         case_runs = model_inventory.get(model)
         if not isinstance(case_runs, dict) or sorted(case_runs) != expected_cases:
@@ -277,6 +319,7 @@ def render_card(
     metadata = _PACKS[dataset]
     provenance = _validate_provenance(review, capture_path)
     dataset_identity = provenance["dataset_identity"]
+    publication_issues = _publication_issue_counts(review)
     lines = [
         f"# {metadata['title']} benchmark result",
         "",
@@ -288,6 +331,13 @@ def render_card(
         f"- rendered at commit: `{rendered_at_commit}`",
         f"- capture SHA-256: `{provenance['capture_sha256']}`",
         f"- dataset snapshot: `{dataset_identity['path']}` tree `{dataset_identity['tree']}`",
+        (
+            "- publication gate: "
+            f"unscorable governed={publication_issues['unscorable']['governed']}, "
+            f"raw={publication_issues['unscorable']['ungoverned']}; "
+            f"recovery errors governed={publication_issues['recovery_errors']['governed']}, "
+            f"raw={publication_issues['recovery_errors']['ungoverned']}"
+        ),
         (
             "- reproduction: "
             f"`.venv/bin/python -m evals.benchmark --dataset {dataset} --runs 3 "

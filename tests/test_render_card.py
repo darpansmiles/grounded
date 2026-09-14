@@ -6,7 +6,9 @@ import json
 import pytest
 
 from evals import render_card as card_renderer
+from evals.offline_scoring import score_capture_files
 from evals.render_card import render_all, render_card
+from scripts.seed_duckdb import seed_database
 
 
 @pytest.fixture(autouse=True)
@@ -63,6 +65,83 @@ def _write_capture(path, *, runs=(1, 2, 3)) -> None:
     path.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
 
 
+def _captured_metric_record(run: int) -> dict:
+    plan = {
+        "tool": "query_metric",
+        "args": {
+            "metric": "revenue",
+            "dimensions": [],
+            "filters": {"order_month": "last_month"},
+        },
+    }
+    return {
+        "record_type": "case",
+        "case_id": "case-1",
+        "model": "stub",
+        "run": run,
+        "category": "total",
+        "role": "viewer",
+        "expect": {"type": "metric"},
+        "expected_plan": plan,
+        "produced_plan": plan,
+        "schema_valid": True,
+        "governed_executed": True,
+        "governed_rows": [{"revenue": 1185.0}],
+        "policy_decisions": [],
+        "evidence": {
+            "metric_definition": {"measure": "sum"},
+            "lineage_citation": "revenue ← fixture lineage",
+            "verification": [],
+            "verify_status": "pass",
+        },
+        "ungoverned": {
+            "raw_sql": "SELECT 1185 AS revenue",
+            "rows": [{"revenue": 1185.0}],
+            "schema_break": False,
+        },
+    }
+
+
+def _score_capture_for_publication_gate(
+    tmp_path, monkeypatch, *, arm: str, recovery_error: bool = False
+):
+    database = tmp_path / "fixture.duckdb"
+    seed_database(str(database))
+    capture = tmp_path / "fixture-final-r3.jsonl"
+    records = [
+        {"record_type": "manifest", "dataset": "fixture", "models": ["stub"], "runs": 3, "schema_version": 2}
+    ]
+    for run in (1, 2, 3):
+        record = _captured_metric_record(run)
+        if arm == "governed":
+            record["governed_rows"] = [{"revenue": 1185.0}] * 50
+            record["governed_row_count"] = 51
+        else:
+            record["ungoverned"]["rows"] = [{"revenue": 1185.0}] * 50
+            record["ungoverned"]["row_count"] = 51
+        records.append(record)
+    capture.write_text(
+        "\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        "evals.offline_scoring._golden_case_ids_at_revision", lambda *_args: ["case-1"]
+    )
+    kwargs = {}
+    if recovery_error:
+        def fail_recovery(*_args):
+            raise RuntimeError("replay unavailable")
+
+        kwargs["raw_rows_recoverer"] = fail_recovery
+    report = score_capture_files([capture], db_path=database, **kwargs)
+    monkeypatch.setattr(
+        card_renderer,
+        "_dataset_tree_at_revision",
+        lambda *_args: report["provenance"]["dataset_identity"]["tree"],
+    )
+    monkeypatch.setattr(card_renderer, "_expected_case_ids_at_revision", lambda *_args: ["case-1"])
+    return capture, report
+
+
 def _with_provenance(review: dict, capture) -> dict:
     review["provenance"] = {
         "capture_filename": capture.name,
@@ -100,6 +179,39 @@ def test_render_card_formats_rate_denominators_and_fixture_low_n_caveat(tmp_path
     assert "fixture-final-r3-review.json" in rendered
     assert "--recover-raw --recover-governed" in rendered
     assert "Cube must be running for governed recovery" in rendered
+    assert "publication gate: unscorable governed=0, raw=0; recovery errors governed=0, raw=0" in rendered
+
+
+def test_capture_report_renderer_rejects_unscorable_outcomes(tmp_path, monkeypatch):
+    capture, report = _score_capture_for_publication_gate(
+        tmp_path, monkeypatch, arm="governed"
+    )
+
+    assert report["models"]["stub"]["valid"] is False
+    assert report["publication"]["unscorable_counts"] == {"governed": 3, "ungoverned": 0}
+    with pytest.raises(ValueError, match=r"unscorable outcomes \(governed=3, raw=0\)"):
+        render_card(
+            report,
+            capture_path=capture,
+            review_path=tmp_path / "fixture-final-r3-review.json",
+            rendered_at_commit="render123",
+        )
+
+
+def test_capture_report_renderer_rejects_raw_recovery_errors(tmp_path, monkeypatch):
+    capture, report = _score_capture_for_publication_gate(
+        tmp_path, monkeypatch, arm="raw", recovery_error=True
+    )
+
+    assert report["models"]["stub"]["valid"] is False
+    assert report["publication"]["recovery_error_counts"] == {"governed": 0, "ungoverned": 3}
+    with pytest.raises(ValueError, match=r"recovery errors \(governed=0, raw=3\)"):
+        render_card(
+            report,
+            capture_path=capture,
+            review_path=tmp_path / "fixture-final-r3-review.json",
+            rendered_at_commit="render123",
+        )
 
 
 def test_render_card_refuses_a_failed_evaluator_gate(tmp_path):
