@@ -124,11 +124,12 @@ argument.
   normalized comparison. No label changed in either arm. This is my own audit
   result, not an independently reproduced one; the audit script
   (`reexec_audit.py`) and a compact summary ([capture-normalization-audit.md](capture-normalization-audit.md))
-  are published in the repository so it can be inspected. Full-result
-  recovery is implemented (`--recover-governed`) but is opt-in: the default
-  comparison still uses captured rows and the exact-hash fallback for large
-  legacy results, so preventing recurrence (rejecting unresolved truncated
-  records as unscorable on both arms) is a planned hardening, not yet enforced.
+  are published in the repository so it can be inspected. The default comparison no longer
+  silently accepts the legacy exact hash for such a record: an unresolved
+  truncated result is marked unscorable on both arms rather than compared by
+  hash. Full-result recovery is opt-in (`--recover-raw`, `--recover-governed`);
+  the published numbers come from that recovery path, which the audit above
+  showed reproduces the same labels the earlier scoring recorded.
   (2) Card provenance is bound to the scoring inputs: each review records the
   capture SHA-256, the scoring commit, the dataset identity, and a
   model-case-run inventory, and the renderer re-verifies the capture hash and
