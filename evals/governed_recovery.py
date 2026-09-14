@@ -8,6 +8,7 @@ when an old bounded capture cannot be compared at response precision.
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -15,8 +16,12 @@ from typing import Any
 
 from agent.agent import _execute_tool_call
 from packlib import load_pack
+from resolver.backends.cube import CubeResponseError
 
 GovernedRowsRecoverer = Callable[[dict[str, Any], str, str | Path | None], list[dict[str, Any]]]
+
+_CUBE_WARMUP_ATTEMPTS = 3
+_CUBE_WARMUP_BACKOFF_SECONDS = 0.25
 
 
 @contextmanager
@@ -66,14 +71,22 @@ def make_governed_rows_recoverer(
         role = record.get("role")
         if not isinstance(plan, dict) or not isinstance(role, str):
             raise TypeError("Stored governed replay requires produced_plan and role")
-        with _active_pack(dataset):
-            response = _execute_tool_call(
-                plan,
-                role,
-                backend=pack.semantics.backend,
-                cube_url=cube_url,
-                db_path=str(db_path or pack.destination.path),
-            )
+        for attempt in range(_CUBE_WARMUP_ATTEMPTS):
+            try:
+                with _active_pack(dataset):
+                    response = _execute_tool_call(
+                        plan,
+                        role,
+                        backend=pack.semantics.backend,
+                        cube_url=cube_url,
+                        db_path=str(db_path or pack.destination.path),
+                    )
+                break
+            except CubeResponseError as error:
+                transient_not_serving = "not serving dataset" in str(error)
+                if not transient_not_serving or attempt == _CUBE_WARMUP_ATTEMPTS - 1:
+                    raise
+                time.sleep(_CUBE_WARMUP_BACKOFF_SECONDS * (attempt + 1))
         rows = response.get("answer_rows")
         if not isinstance(rows, list):
             raise TypeError("Stored governed replay returned no answer_rows list")

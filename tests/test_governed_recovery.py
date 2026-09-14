@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from evals import governed_recovery
+from resolver.backends.cube import CubeResponseError
 
 
 def test_recovery_detects_only_a_legacy_truncated_executed_plan():
@@ -68,3 +69,59 @@ def test_recoverer_uses_the_stored_plan_role_and_active_pack(monkeypatch, tmp_pa
         "active_pack": "bird_ca_schools",
     }
     assert governed_recovery.os.environ["GROUNDED_PACK"] == "previous"
+
+
+def test_recoverer_retries_cube_warmup_once(monkeypatch, tmp_path):
+    class Pack:
+        semantics = type("Semantics", (), {"backend": "cube"})()
+        destination = type("Destination", (), {"path": tmp_path / "pack.duckdb"})()
+
+    attempts = 0
+    pauses: list[float] = []
+    monkeypatch.setattr(governed_recovery, "load_pack", lambda _dataset: Pack())
+    monkeypatch.setattr(governed_recovery.time, "sleep", pauses.append)
+
+    def execute(*_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise CubeResponseError("Cube is not serving dataset 'fixture'.")
+        return {"answer_rows": [{"revenue": 1.0}]}
+
+    monkeypatch.setattr(governed_recovery, "_execute_tool_call", execute)
+
+    rows = governed_recovery.make_governed_rows_recoverer()(
+        {"produced_plan": {"tool": "query_metric", "args": {}}, "role": "analyst"},
+        "fixture",
+        None,
+    )
+
+    assert rows == [{"revenue": 1.0}]
+    assert attempts == 2
+    assert pauses == [governed_recovery._CUBE_WARMUP_BACKOFF_SECONDS]
+
+
+def test_recoverer_does_not_retry_non_transient_cube_error(monkeypatch, tmp_path):
+    class Pack:
+        semantics = type("Semantics", (), {"backend": "cube"})()
+        destination = type("Destination", (), {"path": tmp_path / "pack.duckdb"})()
+
+    attempts = 0
+    monkeypatch.setattr(governed_recovery, "load_pack", lambda _dataset: Pack())
+
+    def execute(*_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        raise CubeResponseError("Cube rejected this request")
+
+    monkeypatch.setattr(governed_recovery, "_execute_tool_call", execute)
+
+    import pytest
+
+    with pytest.raises(CubeResponseError, match="rejected"):
+        governed_recovery.make_governed_rows_recoverer()(
+            {"produced_plan": {"tool": "query_metric", "args": {}}, "role": "analyst"},
+            "fixture",
+            None,
+        )
+    assert attempts == 1
