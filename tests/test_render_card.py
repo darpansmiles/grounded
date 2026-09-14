@@ -88,7 +88,7 @@ def test_render_card_formats_rate_denominators_and_fixture_low_n_caveat(tmp_path
     rendered = render_card(
         _with_provenance(_review(), capture),
         capture_path=capture,
-        review_path=tmp_path / "fixture-final-r3-review-069.json",
+        review_path=tmp_path / "fixture-final-r3-review.json",
         rendered_at_commit="render123",
     )
 
@@ -97,7 +97,9 @@ def test_render_card_formats_rate_denominators_and_fixture_low_n_caveat(tmp_path
     assert "Applicable denominators range from 3 to 30" in rendered
     assert "scoring commit: `score123`" in rendered
     assert "rendered at commit: `render123`" in rendered
-    assert "fixture-final-r3-review-069.json" in rendered
+    assert "fixture-final-r3-review.json" in rendered
+    assert "--recover-raw --recover-governed" in rendered
+    assert "Cube must be running for governed recovery" in rendered
 
 
 def test_render_card_refuses_a_failed_evaluator_gate(tmp_path):
@@ -110,7 +112,7 @@ def test_render_card_refuses_a_failed_evaluator_gate(tmp_path):
         render_card(
             review,
             capture_path=capture,
-            review_path=tmp_path / "fixture-final-r3-review-069.json",
+            review_path=tmp_path / "fixture-final-r3-review.json",
             rendered_at_commit="render123",
         )
 
@@ -125,7 +127,7 @@ def test_render_card_rejects_capture_hash_mismatch(tmp_path):
         render_card(
             review,
             capture_path=capture,
-            review_path=tmp_path / "fixture-final-r3-review-069.json",
+            review_path=tmp_path / "fixture-final-r3-review.json",
             rendered_at_commit="render123",
         )
 
@@ -145,7 +147,7 @@ def test_render_card_rejects_incomplete_runs_and_invalid_models(tmp_path):
         render_card(
             review,
             capture_path=capture,
-            review_path=tmp_path / "fixture-final-r3-review-069.json",
+            review_path=tmp_path / "fixture-final-r3-review.json",
             rendered_at_commit="render123",
         )
 
@@ -160,7 +162,7 @@ def test_render_card_rejects_invalid_model(tmp_path):
         render_card(
             review,
             capture_path=capture,
-            review_path=tmp_path / "fixture-final-r3-review-069.json",
+            review_path=tmp_path / "fixture-final-r3-review.json",
             rendered_at_commit="render123",
         )
 
@@ -178,7 +180,7 @@ def test_render_card_rejects_missing_expected_case(tmp_path, monkeypatch):
         render_card(
             review,
             capture_path=capture,
-            review_path=tmp_path / "fixture-final-r3-review-069.json",
+            review_path=tmp_path / "fixture-final-r3-review.json",
             rendered_at_commit="render123",
         )
 
@@ -193,7 +195,7 @@ def test_render_card_rejects_sample_inventory_mismatch(tmp_path):
         render_card(
             review,
             capture_path=capture,
-            review_path=tmp_path / "fixture-final-r3-review-069.json",
+            review_path=tmp_path / "fixture-final-r3-review.json",
             rendered_at_commit="render123",
         )
 
@@ -208,7 +210,7 @@ def test_render_card_rejects_dataset_identity_mismatch(tmp_path):
         render_card(
             review,
             capture_path=capture,
-            review_path=tmp_path / "fixture-final-r3-review-069.json",
+            review_path=tmp_path / "fixture-final-r3-review.json",
             rendered_at_commit="render123",
         )
 
@@ -225,16 +227,16 @@ def test_render_card_rejects_rate_arithmetic_mismatch(tmp_path):
         render_card(
             review,
             capture_path=capture,
-            review_path=tmp_path / "fixture-final-r3-review-069.json",
+            review_path=tmp_path / "fixture-final-r3-review.json",
             rendered_at_commit="render123",
         )
 
-def test_render_all_requires_authoritative_069_review_files(tmp_path):
+def test_render_all_requires_authoritative_review_files(tmp_path):
     scores = tmp_path / "scores"
     captures = tmp_path / "captures"
     scores.mkdir()
     captures.mkdir()
-    (scores / "aw-final-r3-review-069.json").write_text(
+    (scores / "aw-final-r3-review.json").write_text(
         json.dumps(_review()), encoding="utf-8"
     )
 

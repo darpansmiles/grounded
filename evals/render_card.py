@@ -16,7 +16,7 @@ _PACKS: dict[str, dict[str, str]] = {
     "adventureworks": {
         "title": "AdventureWorks",
         "capture": "aw-final-r3.jsonl",
-        "review": "aw-final-r3-review-069.json",
+        "review": "aw-final-r3-review.json",
         "card": "benchmark-adventureworks-runs3.md",
         "dataset_path": "datasets/adventureworks",
         "prose": "Correct is conditional on answered in-catalog cases. Wrong, interface, and\nevidence use all 213 in-catalog cases. Policy has 15 applicable cases.",
@@ -24,7 +24,7 @@ _PACKS: dict[str, dict[str, str]] = {
     "tpch": {
         "title": "TPC-H",
         "capture": "tpch-final-r3.jsonl",
-        "review": "tpch-final-r3-review-069.json",
+        "review": "tpch-final-r3-review.json",
         "card": "benchmark-tpch-runs3.md",
         "dataset_path": "datasets/tpch",
         "prose": "Correct is conditional on answered in-catalog cases. Wrong, interface, and\nevidence use all 228 in-catalog cases. Policy has 3 applicable cases.",
@@ -32,7 +32,7 @@ _PACKS: dict[str, dict[str, str]] = {
     "spider_world1": {
         "title": "Spider world_1",
         "capture": "spider-final-r3.jsonl",
-        "review": "spider-final-r3-review-069.json",
+        "review": "spider-final-r3-review.json",
         "card": "benchmark-spider_world1-runs3.md",
         "dataset_path": "datasets/spider_world1",
         "prose": "Correct is conditional on answered in-catalog cases. Wrong, interface, and\nevidence use all 93 in-catalog cases. Policy has 3 applicable cases.",
@@ -40,7 +40,7 @@ _PACKS: dict[str, dict[str, str]] = {
     "bird_ca_schools": {
         "title": "BIRD california_schools",
         "capture": "bird-final-r3.jsonl",
-        "review": "bird-final-r3-review-069.json",
+        "review": "bird-final-r3-review.json",
         "card": "benchmark-bird_ca_schools-runs3.md",
         "dataset_path": "datasets/bird_ca_schools",
         "prose": "Correct is conditional on answered in-catalog cases. Wrong, interface, and\nevidence use all 69 in-catalog cases. There are no applicable policy cases.",
@@ -48,7 +48,7 @@ _PACKS: dict[str, dict[str, str]] = {
     "fixture": {
         "title": "Fixture",
         "capture": "fixture-final-r3.jsonl",
-        "review": "fixture-final-r3-review-069.json",
+        "review": "fixture-final-r3-review.json",
         "card": "benchmark-fixture-runs3.md",
         "dataset_path": "datasets/fixture",
         "prose": "This deterministic pack has 30 in-catalog cases per model. Its small\ndenominators make it a harness test surface, not a workload claim. Correct is\nconditional on answered in-catalog cases; policy has 3 applicable cases.\n\nApplicable denominators range from 3 to 30 cases per model, so the near-100%\ngoverned figures are low-N and should not be read as workload evidence.",
@@ -293,7 +293,9 @@ def render_card(
             f"`.venv/bin/python -m evals.benchmark --dataset {dataset} --runs 3 "
             f"--capture-path .grounded/captures/{capture_path.name} && "
             f".venv/bin/python -m evals.compare --capture-path .grounded/captures/{capture_path.name} "
-            f"--offline-output .grounded/scores/{review_path.name}`"
+            f"--recover-raw --recover-governed "
+            f"--offline-output .grounded/scores/{review_path.name}` "
+            "(Cube must be running for governed recovery.)"
         ),
         "",
         metadata["prose"],
@@ -316,7 +318,7 @@ def render_all(
     captures_dir: Path = Path(".grounded/captures"),
     results_dir: Path = Path("evals/results"),
 ) -> list[Path]:
-    """Render all five 069-reviewed cards only after every review validates."""
+    """Render all five reviewed cards only after every review validates."""
     revision = _short_revision()
     rendered_cards: list[tuple[Path, str]] = []
     for metadata in _PACKS.values():
