@@ -42,7 +42,7 @@ column. A query can also execute and still return rows that do not answer the
 question. The corrected scorer keeps those modes visible instead of collapsing
 them into one reassuring percentage.
 
-Across the same runs, raw-SQL correct-when-answered ranged from 0.0% to 9.9%
+Across the same runs, raw-SQL correct-when-answered ranged from 4.7% to 22.5%
 on AdventureWorks, 0.0% throughout TPC-H, 0.0% to 13.3% on Spider, and 0.0%
 to 15.4% on BIRD. The full five-pack tables keep the raw answer and wrong
 denominators visible in [benchmarks.md](benchmarks.md).

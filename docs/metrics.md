@@ -58,11 +58,11 @@ The full per-model numerators and denominators are in
 
 | Pack | In-catalog cases / model | Gov. correct / answered | Gov. wrong / all | Gov. evidence / all | Raw SQL correct / answered |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| AdventureWorks | 213 | 0.0%–94.3% | 5.6%–40.8% | 7.0%–94.4% | 0.0%–9.9% |
+| AdventureWorks | 213 | 0.0%–94.3% | 5.6%–40.8% | 7.0%–94.4% | 4.7%–22.5% |
 | TPC-H | 228 | 10.5%–98.7% | 1.3%–47.4% | 50.0%–98.7% | 0.0% |
 | Spider world_1 | 93 | 79.3%–100.0% | 0.0%–19.4% | 83.9%–100.0% | 0.0%–13.3% |
 | BIRD california_schools | 69 | 60.0%–100.0% | 0.0%–39.1% | 39.1%–78.3% | 0.0%–15.4% |
-| Fixture | 30 | 0.0%–100.0% | 0.0%–30.0% | 10.0%–100.0% | 0.0% or n/a |
+| Fixture | 30 | 0.0%–100.0% | 0.0%–30.0% | 10.0%–100.0% | 0.0%–12.5% or n/a |
 
 The fixture has small denominators and is deterministic. Its range validates
 the harness surface rather than a real-workload claim.
