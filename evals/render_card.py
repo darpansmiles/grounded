@@ -1,4 +1,4 @@
-"""Render publishable four-dimension result cards from offline review JSON."""
+"""Render narrated, denominator-aware result cards from offline review JSON."""
 
 from __future__ import annotations
 
@@ -95,6 +95,35 @@ def _rate_cell(value: dict[str, Any]) -> str:
     if not math.isclose(float(rate), numerator / denominator, rel_tol=0, abs_tol=1e-12):
         raise ValueError(f"Rate does not equal numerator/denominator: {value!r}")
     return f"{float(rate) * 100:.1f}% ({numerator}/{denominator})"
+
+
+def _governed_answered_all(
+    correct: dict[str, Any], wrong: dict[str, Any]
+) -> tuple[int, int]:
+    """Return the recorded governed answered/all denominators with validation."""
+    answered = correct.get("denominator")
+    all_cases = wrong.get("denominator")
+    if not isinstance(answered, int) or not isinstance(all_cases, int):
+        raise TypeError("Coverage requires integer governed denominators.")
+    if answered < 0 or all_cases <= 0 or answered > all_cases:
+        raise ValueError("Coverage has invalid answered/all denominators.")
+    return answered, all_cases
+
+
+def _coverage_cell(correct: dict[str, Any], wrong: dict[str, Any]) -> str:
+    """Show answered/all without changing the independently scored source rates."""
+    answered, all_cases = _governed_answered_all(correct, wrong)
+    return f"{answered / all_cases * 100:.1f}% ({answered}/{all_cases})"
+
+
+def _refused_or_unscorable_cell(correct: dict[str, Any], wrong: dict[str, Any]) -> str:
+    """Present the recorded all-minus-answered remainder without re-scoring it."""
+    answered, all_cases = _governed_answered_all(correct, wrong)
+    refused_or_unscorable = all_cases - answered
+    return (
+        f"{refused_or_unscorable / all_cases * 100:.1f}% "
+        f"({refused_or_unscorable}/{all_cases})"
+    )
 
 
 def _capture_sha256(path: Path) -> str:
@@ -350,15 +379,28 @@ def render_card(
         "",
         metadata["prose"],
         "",
-        "| Model | Gov. correct | Gov. wrong | Interface | Policy | Evidence | Raw SQL correct | Raw SQL wrong |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Model | Coverage (answered / all) | Refused / unscorable (÷ all) | Gov. correct | Gov. wrong | Interface | Policy | Evidence | Raw SQL correct | Raw SQL wrong |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for model_name in sorted(review["models"]):
         groups = review["models"][model_name].get("groups", {})
         in_catalog = groups.get("in_catalog")
         if not isinstance(in_catalog, dict):
             raise TypeError(f"{dataset}/{model_name} has no in_catalog group.")
-        cells = [_rate_cell(in_catalog[arm][metric]) for arm, metric in _COLUMNS]
+        governed = in_catalog["governed"]
+        coverage = _coverage_cell(
+            governed["answer_correctness_when_answered"],
+            governed["wrong_answer_rate"],
+        )
+        refused_or_unscorable = _refused_or_unscorable_cell(
+            governed["answer_correctness_when_answered"],
+            governed["wrong_answer_rate"],
+        )
+        cells = [
+            coverage,
+            refused_or_unscorable,
+            *[_rate_cell(in_catalog[arm][metric]) for arm, metric in _COLUMNS],
+        ]
         lines.append(f"| {_display_model(model_name)} | " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
 

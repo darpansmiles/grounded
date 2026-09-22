@@ -88,16 +88,18 @@ isolate the mechanism.
 ## Runs=3 five-pack results
 
 Each pack passed the evaluator self-test. The ranges below are across the nine
-local models; full per-model numerators and denominators are in
+local models; coverage makes the answered / all denominator explicit, while
+refused / unscorable is its complement over all. Full per-model numerators and
+denominators are in
 [docs/benchmarks.md](../docs/benchmarks.md).
 
-| Pack | In-catalog cases / model | Gov. correct / answered | Gov. wrong / all | Evidence / all | Raw SQL correct / answered |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| AdventureWorks | 213 | 0.0%–94.3% | 5.6%–40.8% | 7.0%–94.4% | 4.7%–22.5% |
-| TPC-H | 228 | 10.5%–98.7% | 1.3%–47.4% | 50.0%–98.7% | 0.0% |
-| Spider world_1 | 93 | 79.3%–100.0% | 0.0%–19.4% | 83.9%–100.0% | 0.0%–13.3% |
-| BIRD california_schools | 69 | 60.0%–100.0% | 0.0%–39.1% | 39.1%–78.3% | 0.0%–15.4% |
-| Fixture | 30 | 0.0%–100.0% | 0.0%–30.0% | 10.0%–100.0% | 0.0%–12.5% or n/a |
+| Pack | In-catalog cases / model | Coverage (answered / all) | Refused / unscorable (÷ all) | Gov. correct / answered | Gov. wrong / all | Evidence / all | Raw SQL correct / answered |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| AdventureWorks | 213 | 15.5%–100.0% | 0.0%–84.5% | 0.0%–94.3% | 5.6%–40.8% | 7.0%–94.4% | 4.7%–22.5% |
+| TPC-H | 228 | 50.0%–100.0% | 0.0%–50.0% | 10.5%–98.7% | 1.3%–47.4% | 50.0%–98.7% | 0.0% |
+| Spider world_1 | 93 | 93.5%–100.0% | 0.0%–6.5% | 79.3%–100.0% | 0.0%–19.4% | 83.9%–100.0% | 0.0%–13.3% |
+| BIRD california_schools | 69 | 65.2%–100.0% | 0.0%–34.8% | 60.0%–100.0% | 0.0%–39.1% | 39.1%–78.3% | 0.0%–15.4% |
+| Fixture | 30 | 10.0%–100.0% | 0.0%–90.0% | 80.0%–100.0% | 0.0%–20.0% | 10.0%–100.0% | 0.0%–12.5% or n/a |
 
 The fixture is a small deterministic pack. Its percentages are useful for
 testing the harness, not for a real-workload claim.

@@ -171,7 +171,9 @@ def test_render_card_formats_rate_denominators_and_fixture_low_n_caveat(tmp_path
         rendered_at_commit="render123",
     )
 
-    assert "| stub | 100.0% (3/3)" in rendered
+    assert "| stub | 100.0% (3/3) | 0.0% (0/3)" in rendered
+    assert "| stub | 100.0% (3/3) | 0.0% (0/3) | 100.0% (3/3)" in rendered
+    assert "Coverage (answered / all)" in rendered
     assert "NA (0/0)" in rendered
     assert "Applicable denominators range from 3 to 30" in rendered
     assert "scoring commit: `score123`" in rendered
@@ -180,6 +182,16 @@ def test_render_card_formats_rate_denominators_and_fixture_low_n_caveat(tmp_path
     assert "--recover-raw --recover-governed" in rendered
     assert "Cube must be running for governed recovery" in rendered
     assert "publication gate: unscorable governed=0, raw=0; recovery errors governed=0, raw=0" in rendered
+
+
+def test_coverage_and_refusal_are_derived_from_existing_governed_denominators():
+    correct = {"numerator": 171, "denominator": 189, "rate": 171 / 189}
+    wrong = {"numerator": 18, "denominator": 213, "rate": 18 / 213}
+
+    assert card_renderer._coverage_cell(correct, wrong) == "88.7% (189/213)"
+    assert card_renderer._refused_or_unscorable_cell(correct, wrong) == "11.3% (24/213)"
+    assert 189 + 24 == 213
+    assert 171 + 18 + 24 == 213
 
 
 def test_capture_report_renderer_rejects_unscorable_outcomes(tmp_path, monkeypatch):
