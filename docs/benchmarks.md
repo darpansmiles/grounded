@@ -17,6 +17,11 @@ no correctness credit. Coverage and correct when answered are reported in the
 diagnostic table to expose the answer-more-versus-answer-accurately tradeoff.
 Counts aggregate three runs and are attempts, not distinct questions.
 
+"No scored answer" is the remainder outside the correctness-scored subset
+(`all − answered`); it does not necessarily indicate an explicit refusal, and
+can include invalid or failed output. Unscorable evaluation records are handled
+separately by the publication gate, not counted here as model behavior.
+
 All figures aggregate three runs at temperature 0. Run variance was
 approximately zero. The fixture is a tiny deterministic pack with small
 denominators; it validates the test surface and does not carry the product
@@ -180,11 +185,13 @@ argument.
 - A governed call can be structurally valid and still answer the wrong question.
 - Both arms are numerically normalized to the same two-decimal precision before
   comparison, so a raw value that is correct but differently rounded is not
-  counted wrong. Under that symmetric comparison, raw-SQL correctness on
-  AdventureWorks is 4.7–22.5% across the nine models (14.1–22.5% for the four
-  capable ones), not near-zero; it is 0% on TPC-H. The governed advantage is a
-  claim about the capable models: on AdventureWorks the weakest model,
-  qwen2.5:3b, answered 0% correct under governance versus 21.1% raw.
+  counted wrong. Under that symmetric comparison, raw-SQL correct / all on
+  AdventureWorks ranges from 2.8% to 22.5% across the nine models (14.1% to
+  22.5% for the four highlighted models), not near-zero; it is 0% on TPC-H.
+  Conditional correctness among answered attempts is reported separately in the
+  diagnostic tables. The governed advantage is a claim about the capable models,
+  and governance does not improve every model: qwen2.5:3b produces correct
+  answers on 0/213 governed attempts versus 24/213 raw-SQL attempts (11.3%).
 - The diagnostic buckets for raw failures (incorrect aggregation/join, wrong
   business definition) are **heuristic** unless manually adjudicated. A sampled
   inspection of TPC-H raw failures found genuine wrong answers (for instance a
