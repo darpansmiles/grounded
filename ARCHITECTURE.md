@@ -105,12 +105,13 @@ live comparison remains historical and must not be used for a corrected card.
 ## Benchmark presentation boundary
 
 `evals.render_card` presents reviewed offline-score rates without recomputing
-their numerators or scoring outcomes. It derives both governed coverage and
-refused/unscorable presentation fields from already-recorded denominators:
-answered is the governed correct-when-answered denominator and all is the
-governed wrong-answer denominator. Refused/unscorable is `all - answered`.
-This makes coverage loss legible while keeping correct and wrong as their
-separately-scored quantities.
+their numerators or scoring outcomes. Its primary correct/all field combines
+the recorded correct numerator with the recorded all-attempt denominator.
+Its diagnostic coverage and no-scored-answer fields are likewise derived from
+the recorded denominators: answered is the correct-when-answered denominator,
+all is the wrong-answer denominator, and no scored answer is `all - answered`.
+This makes the answer-more-versus-answer-accurately tradeoff legible while
+keeping correct and wrong as their separately-scored quantities.
 
 ## Dataset-pack boundary
 

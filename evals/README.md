@@ -88,18 +88,18 @@ isolate the mechanism.
 ## Runs=3 five-pack results
 
 Each pack passed the evaluator self-test. The ranges below are across the nine
-local models; coverage makes the answered / all denominator explicit, while
-refused / unscorable is its complement over all. Full per-model numerators and
-denominators are in
+local models. Primary correctness is correct / all in-catalog attempts; the
+remaining columns are diagnostic ranges, including coverage and no scored
+answer / all. Full per-model numerators and denominators are in
 [docs/benchmarks.md](../docs/benchmarks.md).
 
-| Pack | In-catalog cases / model | Coverage (answered / all) | Refused / unscorable (÷ all) | Gov. correct / answered | Gov. wrong / all | Evidence / all | Raw SQL correct / answered |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| AdventureWorks | 213 | 15.5%–100.0% | 0.0%–84.5% | 0.0%–94.3% | 5.6%–40.8% | 7.0%–94.4% | 4.7%–22.5% |
-| TPC-H | 228 | 50.0%–100.0% | 0.0%–50.0% | 10.5%–98.7% | 1.3%–47.4% | 50.0%–98.7% | 0.0% |
-| Spider world_1 | 93 | 93.5%–100.0% | 0.0%–6.5% | 79.3%–100.0% | 0.0%–19.4% | 83.9%–100.0% | 0.0%–13.3% |
-| BIRD california_schools | 69 | 65.2%–100.0% | 0.0%–34.8% | 60.0%–100.0% | 0.0%–39.1% | 39.1%–78.3% | 0.0%–15.4% |
-| Fixture | 30 | 10.0%–100.0% | 0.0%–90.0% | 80.0%–100.0% | 0.0%–20.0% | 10.0%–100.0% | 0.0%–12.5% or n/a |
+| Pack | In-catalog attempts / model | Governed correct / all | Raw SQL correct / all | Gov. coverage (answered / all) | Gov. correct when answered | Gov. wrong / all | Gov. No scored answer / all | Raw coverage (answered / all) | Raw SQL correct when answered | Raw SQL wrong / all | Raw SQL No scored answer / all | Gov. evidence / all |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| AdventureWorks | 213 | 0.0%–93.0% | 2.8%–22.5% | 15.5%–100.0% | 0.0%–94.3% | 5.6%–40.8% | 0.0%–84.5% | 47.9%–100.0% | 4.7%–22.5% | 42.3%–93.0% | 0.0%–52.1% | 7.0%–94.4% |
+| TPC-H | 228 | 5.3%–98.7% | 0.0%–0.0% | 50.0%–100.0% | 10.5%–98.7% | 1.3%–47.4% | 0.0%–50.0% | 46.1%–100.0% | 0.0%–0.0% | 46.1%–100.0% | 0.0%–53.9% | 50.0%–98.7% |
+| Spider world_1 | 93 | 74.2%–100.0% | 0.0%–12.9% | 93.5%–100.0% | 79.3%–100.0% | 0.0%–19.4% | 0.0%–6.5% | 61.3%–100.0% | 0.0%–13.3% | 61.3%–96.8% | 0.0%–38.7% | 83.9%–100.0% |
+| BIRD california_schools | 69 | 39.1%–100.0% | 0.0%–8.7% | 65.2%–100.0% | 60.0%–100.0% | 0.0%–39.1% | 0.0%–34.8% | 30.4%–87.0% | 0.0%–15.4% | 26.1%–78.3% | 13.0%–69.6% | 39.1%–78.3% |
+| Fixture | 30 | 10.0%–100.0% | 0.0%–10.0% | 10.0%–100.0% | 80.0%–100.0% | 0.0%–20.0% | 0.0%–90.0% | 0.0%–90.0% | 0.0%–12.5% or n/a | 0.0%–90.0% | 10.0%–100.0% | 10.0%–100.0% |
 
 The fixture is a small deterministic pack. Its percentages are useful for
 testing the harness, not for a real-workload claim.

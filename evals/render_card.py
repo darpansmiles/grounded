@@ -19,7 +19,7 @@ _PACKS: dict[str, dict[str, str]] = {
         "review": "aw-final-r3-review.json",
         "card": "benchmark-adventureworks-runs3.md",
         "dataset_path": "datasets/adventureworks",
-        "prose": "Correct is conditional on answered in-catalog cases. Wrong, interface, and\nevidence use all 213 in-catalog cases. Policy has 15 applicable cases.",
+        "prose": "Primary correctness is correct / all 213 in-catalog attempts. The\ndiagnostic table retains answered-case correctness, coverage, wrong, and no\nscored answer. Policy has 15 applicable cases.",
     },
     "tpch": {
         "title": "TPC-H",
@@ -27,7 +27,7 @@ _PACKS: dict[str, dict[str, str]] = {
         "review": "tpch-final-r3-review.json",
         "card": "benchmark-tpch-runs3.md",
         "dataset_path": "datasets/tpch",
-        "prose": "Correct is conditional on answered in-catalog cases. Wrong, interface, and\nevidence use all 228 in-catalog cases. Policy has 3 applicable cases.",
+        "prose": "Primary correctness is correct / all 228 in-catalog attempts. The\ndiagnostic table retains answered-case correctness, coverage, wrong, and no\nscored answer. Policy has 3 applicable cases.",
     },
     "spider_world1": {
         "title": "Spider world_1",
@@ -35,7 +35,7 @@ _PACKS: dict[str, dict[str, str]] = {
         "review": "spider-final-r3-review.json",
         "card": "benchmark-spider_world1-runs3.md",
         "dataset_path": "datasets/spider_world1",
-        "prose": "Correct is conditional on answered in-catalog cases. Wrong, interface, and\nevidence use all 93 in-catalog cases. Policy has 3 applicable cases.",
+        "prose": "Primary correctness is correct / all 93 in-catalog attempts. The\ndiagnostic table retains answered-case correctness, coverage, wrong, and no\nscored answer. Policy has 3 applicable cases.",
     },
     "bird_ca_schools": {
         "title": "BIRD california_schools",
@@ -43,7 +43,7 @@ _PACKS: dict[str, dict[str, str]] = {
         "review": "bird-final-r3-review.json",
         "card": "benchmark-bird_ca_schools-runs3.md",
         "dataset_path": "datasets/bird_ca_schools",
-        "prose": "Correct is conditional on answered in-catalog cases. Wrong, interface, and\nevidence use all 69 in-catalog cases. There are no applicable policy cases.",
+        "prose": "Primary correctness is correct / all 69 in-catalog attempts. The\ndiagnostic table retains answered-case correctness, coverage, wrong, and no\nscored answer. There are no applicable policy cases.",
     },
     "fixture": {
         "title": "Fixture",
@@ -51,20 +51,9 @@ _PACKS: dict[str, dict[str, str]] = {
         "review": "fixture-final-r3-review.json",
         "card": "benchmark-fixture-runs3.md",
         "dataset_path": "datasets/fixture",
-        "prose": "This deterministic pack has 30 in-catalog cases per model. Its small\ndenominators make it a harness test surface, not a workload claim. Correct is\nconditional on answered in-catalog cases; policy has 3 applicable cases.\n\nApplicable denominators range from 3 to 30 cases per model, so the near-100%\ngoverned figures are low-N and should not be read as workload evidence.",
+        "prose": "This deterministic pack has 30 in-catalog attempts per model. Its\nsmall denominators make it a harness test surface, not a workload claim.\nPrimary correctness is correct / all; policy has 3 applicable cases.\n\nApplicable denominators range from 3 to 30 attempts per model, so the\nnear-100% governed figures are low-N and should not be read as workload\nevidence.",
     },
 }
-
-_COLUMNS = (
-    ("governed", "answer_correctness_when_answered"),
-    ("governed", "wrong_answer_rate"),
-    ("governed", "interface_compliance_rate"),
-    ("governed", "policy_compliance_rate"),
-    ("governed", "evidence_completeness_rate"),
-    ("ungoverned", "answer_correctness_when_answered"),
-    ("ungoverned", "wrong_answer_rate"),
-)
-
 
 def _short_revision() -> str:
     completed = subprocess.run(
@@ -97,32 +86,41 @@ def _rate_cell(value: dict[str, Any]) -> str:
     return f"{float(rate) * 100:.1f}% ({numerator}/{denominator})"
 
 
-def _governed_answered_all(
+def _answered_all(
     correct: dict[str, Any], wrong: dict[str, Any]
 ) -> tuple[int, int]:
-    """Return the recorded governed answered/all denominators with validation."""
+    """Return recorded answered/all denominators with presentation validation."""
     answered = correct.get("denominator")
     all_cases = wrong.get("denominator")
     if not isinstance(answered, int) or not isinstance(all_cases, int):
-        raise TypeError("Coverage requires integer governed denominators.")
+        raise TypeError("Presentation requires integer answered/all denominators.")
     if answered < 0 or all_cases <= 0 or answered > all_cases:
-        raise ValueError("Coverage has invalid answered/all denominators.")
+        raise ValueError("Presentation has invalid answered/all denominators.")
     return answered, all_cases
 
 
 def _coverage_cell(correct: dict[str, Any], wrong: dict[str, Any]) -> str:
     """Show answered/all without changing the independently scored source rates."""
-    answered, all_cases = _governed_answered_all(correct, wrong)
+    answered, all_cases = _answered_all(correct, wrong)
     return f"{answered / all_cases * 100:.1f}% ({answered}/{all_cases})"
 
 
-def _refused_or_unscorable_cell(correct: dict[str, Any], wrong: dict[str, Any]) -> str:
+def _correct_all_cell(correct: dict[str, Any], wrong: dict[str, Any]) -> str:
+    """Present recorded correct numerator over all attempts without re-scoring."""
+    answered, all_cases = _answered_all(correct, wrong)
+    correct_numerator = correct.get("numerator")
+    if not isinstance(correct_numerator, int) or not 0 <= correct_numerator <= answered:
+        raise ValueError("Correct/all has an invalid recorded numerator.")
+    return f"{correct_numerator / all_cases * 100:.1f}% ({correct_numerator}/{all_cases})"
+
+
+def _no_scored_answer_cell(correct: dict[str, Any], wrong: dict[str, Any]) -> str:
     """Present the recorded all-minus-answered remainder without re-scoring it."""
-    answered, all_cases = _governed_answered_all(correct, wrong)
-    refused_or_unscorable = all_cases - answered
+    answered, all_cases = _answered_all(correct, wrong)
+    no_scored_answer = all_cases - answered
     return (
-        f"{refused_or_unscorable / all_cases * 100:.1f}% "
-        f"({refused_or_unscorable}/{all_cases})"
+        f"{no_scored_answer / all_cases * 100:.1f}% "
+        f"({no_scored_answer}/{all_cases})"
     )
 
 
@@ -379,8 +377,10 @@ def render_card(
         "",
         metadata["prose"],
         "",
-        "| Model | Coverage (answered / all) | Refused / unscorable (÷ all) | Gov. correct | Gov. wrong | Interface | Policy | Evidence | Raw SQL correct | Raw SQL wrong |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "## Primary correctness",
+        "",
+        "| Model | Attempts | Governed correct / all | Raw SQL correct / all |",
+        "| --- | ---: | ---: | ---: |",
     ]
     for model_name in sorted(review["models"]):
         groups = review["models"][model_name].get("groups", {})
@@ -388,18 +388,52 @@ def render_card(
         if not isinstance(in_catalog, dict):
             raise TypeError(f"{dataset}/{model_name} has no in_catalog group.")
         governed = in_catalog["governed"]
-        coverage = _coverage_cell(
-            governed["answer_correctness_when_answered"],
-            governed["wrong_answer_rate"],
+        ungoverned = in_catalog["ungoverned"]
+        governed_correct = governed["answer_correctness_when_answered"]
+        governed_wrong = governed["wrong_answer_rate"]
+        raw_correct = ungoverned["answer_correctness_when_answered"]
+        raw_wrong = ungoverned["wrong_answer_rate"]
+        _governed_answered, all_cases = _answered_all(governed_correct, governed_wrong)
+        _raw_answered, raw_all_cases = _answered_all(raw_correct, raw_wrong)
+        if raw_all_cases != all_cases:
+            raise ValueError(f"{dataset}/{model_name} has inconsistent all-attempt denominators.")
+        lines.append(
+            f"| {_display_model(model_name)} | {all_cases} | "
+            f"{_correct_all_cell(governed_correct, governed_wrong)} | "
+            f"{_correct_all_cell(raw_correct, raw_wrong)} |"
         )
-        refused_or_unscorable = _refused_or_unscorable_cell(
-            governed["answer_correctness_when_answered"],
-            governed["wrong_answer_rate"],
-        )
+    lines.extend(
+        [
+            "",
+            "## Diagnostic breakdown",
+            "",
+            "| Model | Gov. coverage (answered / all) | Gov. correct when answered | Gov. wrong / all | Gov. No scored answer / all | Raw coverage (answered / all) | Raw SQL correct when answered | Raw SQL wrong / all | Raw SQL No scored answer / all | Interface | Policy | Evidence |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for model_name in sorted(review["models"]):
+        groups = review["models"][model_name].get("groups", {})
+        in_catalog = groups.get("in_catalog")
+        if not isinstance(in_catalog, dict):
+            raise TypeError(f"{dataset}/{model_name} has no in_catalog group.")
+        governed = in_catalog["governed"]
+        ungoverned = in_catalog["ungoverned"]
+        governed_correct = governed["answer_correctness_when_answered"]
+        governed_wrong = governed["wrong_answer_rate"]
+        raw_correct = ungoverned["answer_correctness_when_answered"]
+        raw_wrong = ungoverned["wrong_answer_rate"]
         cells = [
-            coverage,
-            refused_or_unscorable,
-            *[_rate_cell(in_catalog[arm][metric]) for arm, metric in _COLUMNS],
+            _coverage_cell(governed_correct, governed_wrong),
+            _rate_cell(governed_correct),
+            _rate_cell(governed_wrong),
+            _no_scored_answer_cell(governed_correct, governed_wrong),
+            _coverage_cell(raw_correct, raw_wrong),
+            _rate_cell(raw_correct),
+            _rate_cell(raw_wrong),
+            _no_scored_answer_cell(raw_correct, raw_wrong),
+            _rate_cell(governed["interface_compliance_rate"]),
+            _rate_cell(governed["policy_compliance_rate"]),
+            _rate_cell(governed["evidence_completeness_rate"]),
         ]
         lines.append(f"| {_display_model(model_name)} | " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
