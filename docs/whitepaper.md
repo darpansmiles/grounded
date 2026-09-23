@@ -33,7 +33,7 @@ The catalog is a real operating cost. Definitions, dimensions, policies, checks,
 
 The evaluation asks: **For declared analytical tasks, what does a governed interface change about answer correctness, useful coverage, policy enforcement, and inspectability, and what does it cost?** It compares a catalog plus governed tools with a schema plus SQL. It does not isolate the effect of any one mechanism.
 
-The evaluation captures the model's produced plan, executes each non-refusal governed plan using the case role, captures the raw-SQL control attempt, and scores both arms against independently computed direct SQL truth. It reports four dimensions: answer correctness, interface compliance, policy compliance, and evidence completeness. Each rate uses its applicable denominator, with answer correctness conditioned on answered, in-catalog cases. The evaluator self-test must detect five seeded failures before a report is valid: wrong metric, wrong period, duplicate result, missing evidence, and forbidden scope.
+The evaluation captures the model's produced plan, executes each non-refusal governed plan using the case role, captures the raw-SQL control attempt, and scores both arms against independently computed direct SQL truth. It reports four dimensions: answer correctness, interface compliance, policy compliance, and evidence completeness. Answer correctness is reported primarily over all in-catalog attempts, with correctness among answered attempts shown separately. The evaluator self-test must detect five seeded failures before a report is valid: wrong metric, wrong period, duplicate result, missing evidence, and forbidden scope.
 
 The tables below are in-catalog results from three runs across all five packs and nine local models. Run variance was approximately zero. The primary column, **governed correct / all**, divides correct answers by all in-catalog attempts, so refusals and failed attempts receive no correctness credit and one denominator applies to every model and both arms. **Correct / answered** is shown beside it as the conditional quality metric, and the gap between the two is coverage — a model can decline or fail to answer rather than answer wrongly. The [benchmark report](benchmarks.md) has the full primary and diagnostic tables (coverage, wrong-answer, and no-scored-answer rates for both arms), plus the other two scored dimensions.
 
@@ -105,11 +105,11 @@ The fixture is a tiny deterministic pack with 30 in-catalog cases per model,
 and applicable denominators for some dimensions fall to 3–9 cases, so its rates
 are noisy and do not carry the thesis. Governed correct / all ranged from
 10.0% to 100.0% (the low values are models that mostly refuse this tiny pack);
-among answered cases, correctness ranged 80.0% to 100.0%. The raw-SQL arm was 0% correct for
-every model that had applicable cases except qwen2.5:14b (3 / 24, 12.5%); two
-models (phi3.5, qwen2.5:3b) had no applicable raw cases and are reported as N/A,
-not 0%. The full per-model denominators are in the
-[benchmark report](benchmarks.md).
+among answered cases, correctness ranged 80.0% to 100.0%. Raw-SQL correct / all
+was 10.0% (3 / 30) for qwen2.5:14b and 0% for the other models; conditional
+correctness was 12.5% (3 / 24) for qwen2.5:14b and N/A for phi3.5 and
+qwen2.5:3b, which had no scored raw answers. The full per-model denominators are
+in the [benchmark report](benchmarks.md).
 
 ## What the thesis establishes and what it does not
 
